@@ -99,4 +99,17 @@ The modular structure enables parallel development:
 3. Data engineers can work on the `data/` directory
 4. Training algorithm developers can work on the `training/` directory
 
-Each team can work independently while maintaining a consistent interface between modules. 
+Each team can work independently while maintaining a consistent interface between modules.
+
+## Attack Types
+
+This project supports several attack types:
+
+- **None**: No attack, clients behave honestly.
+- **Label Flipping**: Malicious clients flip the labels of their training data.
+- **Scaling Attack**: Malicious clients scale their gradients by a large factor (NUM_CLIENTS).
+- **Partial Scaling Attack**: Malicious clients scale only a subset of their gradient values (66% of values).
+- **Backdoor Attack**: Malicious clients add a constant to their gradients.
+- **Adaptive Attack**: Malicious clients add random noise to their gradients.
+
+The current attack type is set to `partial_scaling_attack`. 
