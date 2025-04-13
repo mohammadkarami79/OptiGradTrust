@@ -112,4 +112,8 @@ This project supports several attack types:
 - **Backdoor Attack**: Malicious clients add a constant to their gradients.
 - **Adaptive Attack**: Malicious clients add random noise to their gradients.
 
-The current attack type is set to `partial_scaling_attack`. 
+The current attack type is set to `partial_scaling_attack`.
+
+## Update Note
+
+This version has been updated to use the `partial_scaling_attack` as the default attack type, which scales only a subset of gradient values (66% of values). This makes the attack more sophisticated and harder to detect compared to the basic scaling attack. 
