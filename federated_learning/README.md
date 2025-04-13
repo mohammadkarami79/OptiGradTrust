@@ -82,6 +82,24 @@ Modify parameters in `config/config.py` to adjust:
 - Attack type
 - Dataset parameters
 
+## Training Configuration
+
+The training process uses the following epoch configurations:
+
+- **LOCAL_EPOCHS_CLIENT**: Number of epochs for training all clients (benign and malicious) in the regular federated training (default: 10)
+- **LOCAL_EPOCHS_ROOT**: Number of epochs for training the trusted root client (default: 200)
+- **MALICIOUS_EPOCHS**: Number of epochs used ONLY for collecting malicious gradients during Dual Attention training (default: 30). This is not used in regular federated updates.
+- **BENIGN_DA_EPOCHS**: Number of epochs used ONLY for collecting benign gradients during Dual Attention training (default: 20). This is not used in regular federated updates.
+
+During the training of the detection models:
+- The VAE is trained on both root gradients (200) and benign client gradients (80), totaling 280 gradients
+- The Dual Attention model is trained on:
+  - 200 root client gradients (labeled as benign)
+  - 160 benign client gradients (BENIGN_DA_EPOCHS × 8 clients)
+  - 600 malicious gradients (MALICIOUS_EPOCHS × 2 clients × 10 attack types)
+
+All these parameters can be configured in `federated_learning/config/config.py`.
+
 ## Development
 
 The modular structure allows for easy development and testing of individual components:
@@ -103,16 +121,21 @@ Each team can work independently while maintaining a consistent interface betwee
 
 ## Attack Types
 
-This project supports several attack types:
+This implementation supports the following attack types:
 
-- **None**: No attack, clients behave honestly.
-- **Label Flipping**: Malicious clients flip the labels of their training data.
-- **Scaling Attack**: Malicious clients scale their gradients by a large factor (NUM_CLIENTS).
-- **Partial Scaling Attack**: Malicious clients scale only a subset of their gradient values (66% of values).
-- **Backdoor Attack**: Malicious clients add a constant to their gradients.
-- **Adaptive Attack**: Malicious clients add random noise to their gradients.
+1. **None**: No attack (honest client)
+2. **Label Flipping**: Inverts gradient direction by flipping labels during training
+3. **Scaling Attack**: Scales gradient by number of clients to dominate aggregation
+4. **Partial Scaling Attack**: Scales a subset (~66%) of gradient elements
+5. **Backdoor Attack**: Adds a constant value to the gradient
+6. **Adaptive Attack**: Adds random noise to gradient proportional to its norm
+7. **Min-Max Attack**: Normalizes and inverts gradient, scales by client count
+8. **Min-Sum Attack**: Minimizes cosine similarity with benign gradients
+9. **Alternating Attack**: Creates oscillating pattern of positive/negative values
+10. **Targeted Attack**: Targets specific subset of parameters
+11. **Gradient Inversion Attack**: Applies different inversion strategies to different parts of the gradient
 
-The current attack type is set to `partial_scaling_attack`.
+The attack type can be configured in the `federated_learning/config/config.py` file by setting the `ATTACK_TYPE` variable.
 
 ## Update Note
 

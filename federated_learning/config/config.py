@@ -12,10 +12,13 @@ LR = 0.01
 GLOBAL_EPOCHS = 100
 LOCAL_EPOCHS_ROOT = 200
 LOCAL_EPOCHS_CLIENT = 10
-MALICIOUS_EPOCHS = 40
+
+# Dual Attention training parameters
+MALICIOUS_EPOCHS = 30  # Number of epochs to collect malicious gradients for Dual Attention training
+BENIGN_DA_EPOCHS = 20  # Number of epochs to collect benign gradients for Dual Attention training
 
 # Attack configuration
-ATTACK_TYPE = 'partial_scaling_attack'  # Options: 'none', 'label_flipping', 'scaling_attack', 'partial_scaling_attack', 'backdoor_attack', 'adaptive_attack'
+ATTACK_TYPE = 'partial_scaling_attack'  # Options: 'none', 'label_flipping', 'scaling_attack', 'partial_scaling_attack', 'backdoor_attack', 'adaptive_attack', 'min_max_attack', 'min_sum_attack', 'alternating_attack', 'targeted_attack', 'gradient_inversion_attack'
 
 # Dataset configuration
 DATASET = 'MNIST'
