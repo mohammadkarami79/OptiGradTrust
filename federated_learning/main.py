@@ -2,7 +2,7 @@ import torch
 import random
 import numpy as np
 from federated_learning.config.config import *
-from federated_learning.data.dataset import load_dataset, split_dataset_non_iid, create_root_dataset
+from federated_learning.data.dataset import load_dataset, split_dataset, create_root_dataset
 from federated_learning.training.server import Server
 
 def print_config():
@@ -18,8 +18,11 @@ def print_config():
     print(f"Local epochs (client): {LOCAL_EPOCHS_CLIENT}")
     print(f"Attack type: {ATTACK_TYPE}")
     print(f"Dataset: {DATASET}")
-    print(f"Non-IID: {NON_IID}")
-    print(f"Q value: {Q}")
+    print(f"Data distribution: {DATA_DISTRIBUTION}")
+    if DATA_DISTRIBUTION == 'label_skew':
+        print(f"Q value: {Q}")
+    elif DATA_DISTRIBUTION == 'dirichlet':
+        print(f"Dirichlet alpha: {DIRICHLET_ALPHA}")
     print(f"Root dataset size: {ROOT_DATASET_SIZE}")
     print(f"Bias probability: {BIAS_PROBABILITY}")
     print(f"Bias class: {BIAS_CLASS}\n")
@@ -51,7 +54,7 @@ def main():
     print(f"Remaining dataset size: {len(remaining_dataset)} samples")
     
     print("\nSplitting data among clients...")
-    client_datasets = split_dataset_non_iid(remaining_dataset, num_classes)
+    client_datasets = split_dataset(remaining_dataset, num_classes)
     for i, dataset in enumerate(client_datasets):
         print(f"Client {i}: {len(dataset)} samples")
     print("Data preparation completed.")

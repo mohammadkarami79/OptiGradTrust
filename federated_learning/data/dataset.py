@@ -239,6 +239,10 @@ def load_dataset():
     return full_dataset, test_dataset, num_classes, input_channels
 
 def split_dataset_non_iid(dataset, num_classes):
+    """
+    Non-IID (Label Skew): Clients have data biased towards certain classes.
+    Uses the existing implementation where clients are grouped by classes.
+    """
     client_datasets = [[] for _ in range(NUM_CLIENTS)]
     class_indices = [[] for _ in range(num_classes)]
     for idx, (_, label) in enumerate(dataset):
@@ -257,6 +261,118 @@ def split_dataset_non_iid(dataset, num_classes):
             client_datasets[client_id].append(idx)
     client_datasets = [torch.utils.data.Subset(dataset, indices) for indices in client_datasets]
     return client_datasets
+
+def split_dataset_iid(dataset, num_classes):
+    """
+    IID: Data is split equally and randomly among clients, ensuring
+    each client has a similar class distribution.
+    """
+    indices = list(range(len(dataset)))
+    random.shuffle(indices)
+    
+    # Calculate the number of samples per client
+    samples_per_client = len(indices) // NUM_CLIENTS
+    
+    # Distribute samples to clients
+    client_datasets = []
+    for i in range(NUM_CLIENTS):
+        start_idx = i * samples_per_client
+        end_idx = start_idx + samples_per_client if i < NUM_CLIENTS - 1 else len(indices)
+        client_indices = indices[start_idx:end_idx]
+        client_datasets.append(torch.utils.data.Subset(dataset, client_indices))
+    
+    return client_datasets
+
+def split_dataset_dirichlet(dataset, num_classes, alpha=None):
+    """
+    Non-IID (Dirichlet): Data is split according to a Dirichlet distribution,
+    introducing random heterogeneity.
+    
+    Args:
+        dataset: The dataset to split
+        num_classes: Number of classes in the dataset
+        alpha: Concentration parameter for Dirichlet distribution
+              Lower alpha -> more skewed distribution
+              If None, uses DIRICHLET_ALPHA from config
+    """
+    if alpha is None:
+        alpha = DIRICHLET_ALPHA
+        
+    # Get indices for each class
+    class_indices = [[] for _ in range(num_classes)]
+    for idx, (_, label) in enumerate(dataset):
+        class_indices[label].append(idx)
+    
+    # Shuffle indices within each class
+    for c in range(num_classes):
+        random.shuffle(class_indices[c])
+    
+    # Initialize client datasets
+    client_datasets = [[] for _ in range(NUM_CLIENTS)]
+    
+    # Sample from Dirichlet distribution for each client
+    proportions = np.random.dirichlet(np.repeat(alpha, NUM_CLIENTS), num_classes)
+    
+    # Calculate the number of samples from each class for each client
+    class_samples_per_client = np.zeros((num_classes, NUM_CLIENTS), dtype=int)
+    for c in range(num_classes):
+        class_size = len(class_indices[c])
+        samples_per_client = np.floor(proportions[c] * class_size).astype(int)
+        
+        # Adjust to ensure all samples are distributed
+        remainder = class_size - samples_per_client.sum()
+        if remainder > 0:
+            # Add the remaining samples to clients with highest proportions
+            indices = np.argsort(proportions[c])[-remainder:]
+            for idx in indices:
+                samples_per_client[idx] += 1
+        
+        class_samples_per_client[c] = samples_per_client
+    
+    # Distribute class samples to clients
+    start_idxs = np.zeros(num_classes, dtype=int)
+    for client_idx in range(NUM_CLIENTS):
+        for class_idx in range(num_classes):
+            samples_count = class_samples_per_client[class_idx][client_idx]
+            start_idx = start_idxs[class_idx]
+            end_idx = start_idx + samples_count
+            
+            # Get indices for this class and client
+            if start_idx < len(class_indices[class_idx]):
+                client_class_indices = class_indices[class_idx][start_idx:end_idx]
+                client_datasets[client_idx].extend(client_class_indices)
+            
+            # Update the starting index for next allocation
+            start_idxs[class_idx] = end_idx
+    
+    # Convert to PyTorch Subset format
+    client_datasets = [torch.utils.data.Subset(dataset, indices) for indices in client_datasets]
+    return client_datasets
+
+def split_dataset(dataset, num_classes, distribution_type=None):
+    """
+    Split the dataset according to the specified distribution type.
+    
+    Args:
+        dataset: The dataset to split
+        num_classes: Number of classes in the dataset
+        distribution_type: Type of data distribution ('iid', 'label_skew', 'dirichlet')
+                           If None, uses DATA_DISTRIBUTION from config
+    
+    Returns:
+        A list of datasets for each client
+    """
+    if distribution_type is None:
+        distribution_type = DATA_DISTRIBUTION
+        
+    if distribution_type == 'iid':
+        return split_dataset_iid(dataset, num_classes)
+    elif distribution_type == 'label_skew':
+        return split_dataset_non_iid(dataset, num_classes)
+    elif distribution_type == 'dirichlet':
+        return split_dataset_dirichlet(dataset, num_classes)
+    else:
+        raise ValueError(f"Unknown distribution type: {distribution_type}")
 
 def create_root_dataset(full_dataset, num_classes):
     if BIAS_PROBABILITY == 1.0:
