@@ -1,0 +1,99 @@
+Python version: 3.13.2 (tags/v3.13.2:4f8bb39, Feb  4 2025, 15:23:48) [MSC v.1942 64 bit (AMD64)]
+PyTorch version: 2.6.0+cu124
+CUDA available: True
+
+=== Testing VAE Reconstruction Error ===
+
+Initializing SimpleVAE with:
+  input_dim: 1000
+  hidden_dim: 256
+  latent_dim: 128
+Model initialized successfully
+
+Generating test data...
+Created 100 trusted gradients
+Gradient shape: torch.Size([1000])
+Created 100 untrusted gradients
+
+Normalizing gradients...
+
+Converting to tensors...
+Trusted tensor shape: torch.Size([100, 1000])
+
+Training VAE on trusted gradients...
+Epoch 5/50:
+  Loss: 1.8307
+  Reconstruction: 1.6197
+  KL Divergence: 2.1100
+Epoch 10/50:
+  Loss: 0.9824
+  Reconstruction: 0.7743
+  KL Divergence: 2.0813
+Epoch 15/50:
+  Loss: 0.5730
+  Reconstruction: 0.3698
+  KL Divergence: 2.0319
+Epoch 20/50:
+  Loss: 0.3859
+  Reconstruction: 0.2023
+  KL Divergence: 1.8369
+Epoch 25/50:
+  Loss: 0.2929
+  Reconstruction: 0.1357
+  KL Divergence: 1.5718
+Epoch 30/50:
+  Loss: 0.2368
+  Reconstruction: 0.1046
+  KL Divergence: 1.3228
+Epoch 35/50:
+  Loss: 0.1956
+  Reconstruction: 0.0818
+  KL Divergence: 1.1379
+Epoch 40/50:
+  Loss: 0.1662
+  Reconstruction: 0.0671
+  KL Divergence: 0.9919
+Epoch 45/50:
+  Loss: 0.1422
+  Reconstruction: 0.0563
+  KL Divergence: 0.8596
+Epoch 50/50:
+  Loss: 0.1225
+  Reconstruction: 0.0470
+  KL Divergence: 0.7549
+
+Testing reconstruction error...
+
+Calculating reconstruction errors...
+
+Reconstruction Error Statistics:
+Trusted gradients: mean=0.0124, std=0.0041
+Untrusted gradients: mean=0.0207, std=0.0060
+
+Separation score: 0.8194
+(Higher score indicates better separation between trusted and untrusted gradients)
+
+Testing with different noise levels...
+Noise level 0.01: mean error = 0.0210 ± 0.0060
+Noise level 0.10: mean error = 0.0230 ± 0.0079
+Noise level 0.20: mean error = 0.0205 ± 0.0070
+Noise level 0.30: mean error = 0.0207 ± 0.0067
+Noise level 0.40: mean error = 0.0227 ± 0.0062
+Noise level 0.50: mean error = 0.0207 ± 0.0058
+
+Error in test_vae_reconstruction: Error should increase with noise level, but 0.2 had lower error than 0.1
+Traceback (most recent call last):
+  File "D:\new_paper\test_vae_custom.py", line 216, in test_vae_reconstruction
+    assert errors_by_noise[i+1] > errors_by_noise[i], \
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error should increase with noise level, but 0.2 had lower error than 0.1
+
+Main error: Error should increase with noise level, but 0.2 had lower error than 0.1
+Traceback (most recent call last):
+  File "D:\new_paper\test_vae_custom.py", line 228, in <module>
+    test_vae_reconstruction()
+    ~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "D:\new_paper\test_vae_custom.py", line 216, in test_vae_reconstruction
+    assert errors_by_noise[i+1] > errors_by_noise[i], \
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Error should increase with noise level, but 0.2 had lower error than 0.1

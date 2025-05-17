@@ -1,0 +1,1547 @@
+
+=== GPU Configuration ===
+GPU: NVIDIA GeForce RTX 3060 Laptop GPU
+CUDA Version: 12.4
+PyTorch Version: 2.6.0+cu124
+
+GPU Memory:
+Total: 6.00 GB
+Allocated: 0.00 GB
+Cached: 0.00 GB
+Random seeds set to 42
+Random seeds set to 42
+
+--- Creating server and clients ---
+Initialized server
+
+Loading MNIST dataset...
+Dataset loaded: 60000 training samples, 10000 test samples
+Number of classes: 10, Input channels: 1
+Datasets set for server
+Datasets set for server
+
+--- Pretraining global model ---
+
+=== Pretraining Global Model on Root Dataset ===
+Pretrain Epoch 1/1, Batch 0, Loss: 8.0828
+Pretrain Epoch 1/1, Batch 50, Loss: 0.9702
+Pretrain Epoch 1/1, Batch 100, Loss: 0.5924
+Pretrain Epoch 1/1, Batch 150, Loss: 0.3537
+Pretrain Epoch 1/1, Batch 200, Loss: 0.3013
+Pretrain Epoch 1/1, Batch 250, Loss: 0.2572
+Pretrain Epoch 1/1, Batch 300, Loss: 0.3579
+Pretrain Epoch 1/1, Batch 350, Loss: 0.1463
+Pretrain Epoch 1/1, Batch 400, Loss: 0.0796
+Pretrain Epoch 1/1, Batch 450, Loss: 0.2125
+Pretrain Epoch 1/1, Batch 500, Loss: 0.2936
+Pretrain Epoch 1/1, Batch 550, Loss: 0.1582
+Pretrain Epoch 1/1, Batch 600, Loss: 0.1282
+Pretrain Epoch 1/1, Batch 650, Loss: 0.1285
+Pretrain Epoch 1/1, Batch 700, Loss: 0.1443
+Pretrain Epoch 1/1, Batch 750, Loss: 0.4501
+Pretrain Epoch 1/1, Batch 800, Loss: 0.0655
+Pretrain Epoch 1/1, Batch 850, Loss: 0.1801
+Pretrain Epoch 1/1, Batch 900, Loss: 0.2601
+Pretrain Epoch 1/1 completed. Average loss: 0.4388
+Pretraining completed
+Using dynamic root dataset size: 6000 samples (10.0% of total)
+Created root dataset with 6000 samples
+Created 5 client datasets
+
+Creating 5 clients, 2 will be malicious
+Malicious client indices: [1, 2]
+Client 1: Initialized as malicious with partial_scaling_attack attack
+Setting client 1 as malicious with attack type: partial_scaling_attack
+Client 1: Attack type set to partial_scaling_attack
+Client 1: Attack parameter scaling_factor = 20.0
+Client 1: Attack parameter partial_percent = 0.4
+Verified client 1 - is_malicious flag: True
+Verified client 1 - has attack: True
+  Attack type: partial_scaling_attack
+  Scaling factor: 20.0
+  Affected percent: 40.0%
+Client 2: Initialized as malicious with partial_scaling_attack attack
+Setting client 2 as malicious with attack type: partial_scaling_attack
+Client 2: Attack type set to partial_scaling_attack
+Client 2: Attack parameter scaling_factor = 20.0
+Client 2: Attack parameter partial_percent = 0.4
+Verified client 2 - is_malicious flag: True
+Verified client 2 - has attack: True
+  Attack type: partial_scaling_attack
+  Scaling factor: 20.0
+  Affected percent: 40.0%
+Added 5 clients to server
+Malicious clients: 2
+
+Client configuration:
+Client 0: HONEST
+Client 1: MALICIOUS
+Client 2: MALICIOUS
+Client 3: HONEST
+Client 4: HONEST
+
+Server's client mappings:
+Server client 0: Client ID = 0, Status = HONEST
+Server client 1: Client ID = 1, Status = MALICIOUS
+Server client 2: Client ID = 2, Status = MALICIOUS
+Server client 3: Client ID = 3, Status = HONEST
+Server client 4: Client ID = 4, Status = HONEST
+
+--- Collecting root gradients ---
+Collecting root gradients...
+Collected 938 gradients from root dataset
+
+--- Training VAE on root gradients ---
+Training VAE on 938 gradients...
+Epoch 1/5, Loss: 267.1396
+Epoch 2/5, Loss: 58.2745
+Epoch 3/5, Loss: 48.8124
+Epoch 4/5, Loss: 48.6416
+Epoch 5/5, Loss: 47.4342
+VAE training completed
+
+--- Starting federated learning ---
+
+=== Starting Federated Learning Process ===
+Warning: No test dataset specified, creating a default one
+
+=== Initial Model Evaluation ===
+Test Accuracy: 0.9784, Error Rate: 0.0216
+Initial test accuracy: 0.9784, error: 0.0216
+
+=== Round 1/3 ===
+
+--- Evaluating global model ---
+Test Accuracy: 0.9784, Error Rate: 0.0216
+Round 1 - Accuracy: 0.9784, Error: 0.0216
+Selected 5 clients for this round
+
+Client status:
+Client 0: HONEST
+Client 2: MALICIOUS
+Client 3: HONEST
+Client 1: MALICIOUS
+Client 4: HONEST
+
+Client 0 (Malicious: False)
+Client 0: Training for 2 local epochs
+Processing 1 small batches by combining them
+Client 0, Epoch 1/2: Loss: 0.382810, Accuracy: 88.94%
+Processing 1 small batches by combining them
+Client 0, Epoch 2/2: Loss: 0.191583, Accuracy: 94.45%
+Client 0: Identified BatchNorm layer: bn1
+Client 0: Identified BatchNorm layer: bn2
+Client 0: Identified BatchNorm layer: bn3
+Client 0: Identified BatchNorm layer: bn4
+Client 0: Found 4 BatchNorm layers
+Client 0: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0242
+Client 0: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0176
+Client 0: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0460
+Client 0: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0242
+Client 0: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.1067
+Client 0: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0391
+Client 0: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.3949
+Client 0: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.5010
+Raw gradient norm before clipping: 1.1735
+Client 0: BatchNorm gradient norm: 0.6507
+Client 0: BatchNorm parameters make up 0.44% of total parameters
+Client 0 gradient norm: 1.1735
+
+Raw Gradient Statistics for Client 0:
+Norm: 1.1735
+Mean: -0.0000
+Std: 0.0032
+
+Client 0 gradient features:
+  Raw gradient norm: 1.1735
+  Normalized gradient norm: 0.1174
+Client 0 gradient features:
+  Raw gradient norm: 1.1735
+  Normalized gradient norm: 0.1174
+Client 0: Gradient norm = 1.1735
+
+Client 2 (Malicious: True)
+Client 2: Training for 2 local epochs
+Client 2, Epoch 1/2: Loss: 0.856455, Accuracy: 76.61%
+Malicious client 2: Early stopping training
+Client 2, Epoch 2/2: Loss: 0.583590, Accuracy: 82.29%
+Client 2: Identified BatchNorm layer: bn1
+Client 2: Identified BatchNorm layer: bn2
+Client 2: Identified BatchNorm layer: bn3
+Client 2: Identified BatchNorm layer: bn4
+Client 2: Found 4 BatchNorm layers
+Client 2: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0136
+Client 2: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0051
+Client 2: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0210
+Client 2: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0108
+Client 2: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.0713
+Client 2: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0235
+Client 2: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.2216
+Client 2: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.2816
+Raw gradient norm before clipping: 0.6819
+Client 2: BatchNorm gradient norm: 0.3671
+Client 2: BatchNorm parameters make up 0.44% of total parameters
+Client 2 gradient norm: 0.6819
+
+Raw Gradient Statistics for Client 2:
+Norm: 0.6819
+Mean: 0.0000
+Std: 0.0019
+Client 2 (MALICIOUS): Original gradient norm before attack: 0.6819
+Partial scaling attack (factor: 20.0, 40.0% of elements) applied:
+  Original norm: 0.6819
+  Modified norm: 8.6777
+  Absolute change: 7.9958
+  Percentage change: 1172.63%
+  Cosine similarity: 0.6809
+Client 2: Applied partial_scaling_attack:
+  Original gradient norm: 0.6819
+  Modified gradient norm: 8.6777
+  Norm increased by: 7.9958 (1172.63%)
+  Gradient difference norm: 8.2286
+
+Client 2 gradient features:
+  Raw gradient norm: 8.6777
+  Normalized gradient norm: 0.8678
+  (This client is malicious)
+  Original gradient norm (before attack): 0.6819
+  Normalized original norm: 0.0682
+  Norm increase from attack: 7.9958 (1172.63%)
+Client 2 gradient features:
+  Raw gradient norm: 8.6777
+  Normalized gradient norm: 0.8678
+  Original norm (before attack): 0.6819
+  Normalized original norm: 0.0682
+  Norm increase from attack: 7.9958 (1172.63%)
+--- MALICIOUS CLIENT METRICS ---
+AFTER attack - Gradient norm: 8.6777
+BEFORE attack - Original gradient norm: 0.6819
+Increase from attack: 7.9958 (1172.63%)
+Client 2: Gradient norm = 8.6777
+
+Client 3 (Malicious: False)
+Client 3: Training for 2 local epochs
+Client 3, Epoch 1/2: Loss: 0.520366, Accuracy: 85.39%
+Client 3, Epoch 2/2: Loss: 0.308210, Accuracy: 91.09%
+Client 3: Identified BatchNorm layer: bn1
+Client 3: Identified BatchNorm layer: bn2
+Client 3: Identified BatchNorm layer: bn3
+Client 3: Identified BatchNorm layer: bn4
+Client 3: Found 4 BatchNorm layers
+Client 3: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0315
+Client 3: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0122
+Client 3: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0278
+Client 3: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0165
+Client 3: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.0812
+Client 3: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0317
+Client 3: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.2714
+Client 3: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.3639
+Raw gradient norm before clipping: 0.8998
+Client 3: BatchNorm gradient norm: 0.4646
+Client 3: BatchNorm parameters make up 0.44% of total parameters
+Client 3 gradient norm: 0.8998
+
+Raw Gradient Statistics for Client 3:
+Norm: 0.8998
+Mean: -0.0000
+Std: 0.0025
+
+Client 3 gradient features:
+  Raw gradient norm: 0.8998
+  Normalized gradient norm: 0.0900
+Client 3 gradient features:
+  Raw gradient norm: 0.8998
+  Normalized gradient norm: 0.0900
+Client 3: Gradient norm = 0.8998
+
+Client 1 (Malicious: True)
+Client 1: Training for 2 local epochs
+Client 1, Epoch 1/2: Loss: 0.205892, Accuracy: 93.84%
+Malicious client 1: Early stopping training
+Client 1, Epoch 2/2: Loss: 0.140611, Accuracy: 95.76%
+Client 1: Identified BatchNorm layer: bn1
+Client 1: Identified BatchNorm layer: bn2
+Client 1: Identified BatchNorm layer: bn3
+Client 1: Identified BatchNorm layer: bn4
+Client 1: Found 4 BatchNorm layers
+Client 1: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0157
+Client 1: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0121
+Client 1: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0391
+Client 1: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0149
+Client 1: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.0724
+Client 1: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0268
+Client 1: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.2222
+Client 1: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.2721
+Raw gradient norm before clipping: 0.7686
+Client 1: BatchNorm gradient norm: 0.3627
+Client 1: BatchNorm parameters make up 0.44% of total parameters
+Client 1 gradient norm: 0.7686
+
+Raw Gradient Statistics for Client 1:
+Norm: 0.7686
+Mean: -0.0000
+Std: 0.0021
+Client 1 (MALICIOUS): Original gradient norm before attack: 0.7686
+Partial scaling attack (factor: 20.0, 40.0% of elements) applied:
+  Original norm: 0.7686
+  Modified norm: 9.5808
+  Absolute change: 8.8121
+  Percentage change: 1146.46%
+  Cosine similarity: 0.6700
+Client 1: Applied partial_scaling_attack:
+  Original gradient norm: 0.7686
+  Modified gradient norm: 9.5808
+  Norm increased by: 8.8121 (1146.46%)
+  Gradient difference norm: 9.0838
+
+Client 1 gradient features:
+  Raw gradient norm: 9.5808
+  Normalized gradient norm: 0.9581
+  (This client is malicious)
+  Original gradient norm (before attack): 0.7686
+  Normalized original norm: 0.0769
+  Norm increase from attack: 8.8121 (1146.46%)
+Client 1 gradient features:
+  Raw gradient norm: 9.5808
+  Normalized gradient norm: 0.9581
+  Original norm (before attack): 0.7686
+  Normalized original norm: 0.0769
+  Norm increase from attack: 8.8121 (1146.46%)
+--- MALICIOUS CLIENT METRICS ---
+AFTER attack - Gradient norm: 9.5808
+BEFORE attack - Original gradient norm: 0.7686
+Increase from attack: 8.8121 (1146.46%)
+Client 1: Gradient norm = 9.5808
+
+Client 4 (Malicious: False)
+Client 4: Training for 2 local epochs
+Client 4, Epoch 1/2: Loss: 0.249867, Accuracy: 92.89%
+Client 4, Epoch 2/2: Loss: 0.160685, Accuracy: 95.50%
+Client 4: Identified BatchNorm layer: bn1
+Client 4: Identified BatchNorm layer: bn2
+Client 4: Identified BatchNorm layer: bn3
+Client 4: Identified BatchNorm layer: bn4
+Client 4: Found 4 BatchNorm layers
+Client 4: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0162
+Client 4: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0117
+Client 4: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0377
+Client 4: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0177
+Client 4: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.0935
+Client 4: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0331
+Client 4: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.3024
+Client 4: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.4063
+Raw gradient norm before clipping: 0.9684
+Client 4: BatchNorm gradient norm: 0.5182
+Client 4: BatchNorm parameters make up 0.44% of total parameters
+Client 4 gradient norm: 0.9684
+
+Raw Gradient Statistics for Client 4:
+Norm: 0.9684
+Mean: -0.0001
+Std: 0.0027
+
+Client 4 gradient features:
+  Raw gradient norm: 0.9684
+  Normalized gradient norm: 0.0968
+Client 4 gradient features:
+  Raw gradient norm: 0.9684
+  Normalized gradient norm: 0.0968
+Client 4: Gradient norm = 0.9684
+
+--- Computing Shapley values ---
+Calculating Shapley values for 5 clients
+Baseline model performance: 0.9800
+
+Monte Carlo sample 1/5
+Updating model with gradient (norm: 0.89980108, learning rate: 0.01000000)
+Updating model with gradient (norm: 0.89980108, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 0.62137657, learning rate: 0.01000000)
+Updating model with gradient (norm: 0.62137657, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.98663306, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.98663306, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.31969142, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.31969142, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.61034369, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.61034369, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+
+Monte Carlo sample 2/5
+Updating model with gradient (norm: 0.96839678, learning rate: 0.01000000)
+Updating model with gradient (norm: 0.96839678, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 0.57651383, learning rate: 0.01000000)
+Updating model with gradient (norm: 0.57651383, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.98165059, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.98165059, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.30147028, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.30147028, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.61034369, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.61034369, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+
+Monte Carlo sample 3/5
+Updating model with gradient (norm: 9.58076763, learning rate: 0.01000000)
+Updating model with gradient (norm: 9.58076763, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 4.88035679, learning rate: 0.01000000)
+Updating model with gradient (norm: 4.88035679, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.22553015, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.22553015, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.37419844, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.37419844, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.61034369, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.61034369, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+
+Monte Carlo sample 4/5
+Updating model with gradient (norm: 0.89980108, learning rate: 0.01000000)
+Updating model with gradient (norm: 0.89980108, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 4.52833557, learning rate: 0.01000000)
+Updating model with gradient (norm: 4.52833557, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.98165083, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.98165083, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.30147028, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.30147028, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.61034369, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.61034369, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+
+Monte Carlo sample 5/5
+Updating model with gradient (norm: 0.96839678, learning rate: 0.01000000)
+Updating model with gradient (norm: 0.96839678, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 4.70893431, learning rate: 0.01000000)
+Updating model with gradient (norm: 4.70893431, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.12283635, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.12283635, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.18212986, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.18212986, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.61034369, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.61034369, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+Applied small random perturbation to differentiate similar Shapley values
+
+Shapley Value Results:
+Client 0: Raw = 0.000000, Normalized = 0.6389
+Client 1: Raw = 0.000000, Normalized = 0.6767
+Client 2: Raw = 0.000000, Normalized = 0.1370
+Client 3: Raw = 0.000000, Normalized = 1.0000
+Client 4: Raw = 0.000000, Normalized = 0.0000
+
+Shapley values:
+Client 0 (Malicious: NO): Shapley value = 0.6389
+Client 2 (Malicious: YES): Shapley value = 0.6767
+Client 3 (Malicious: NO): Shapley value = 0.1370
+Client 1 (Malicious: YES): Shapley value = 1.0000
+Client 4 (Malicious: NO): Shapley value = 0.0000
+Updated 6th feature with Shapley values
+
+--- Computing trust scores with dual attention ---
+
+Feature statistics before processing:
+Feature 1: Mean = 0.5000, Std = 0.0000
+  Min = 0.5000, Max = 0.5000
+Feature 2: Mean = 0.5000, Std = 0.0000
+  Min = 0.5000, Max = 0.5000
+Feature 3: Mean = 0.5000, Std = 0.0000
+  Min = 0.5000, Max = 0.5000
+Feature 4: Mean = 0.4260, Std = 0.4458
+  Min = 0.0900, Max = 0.9581
+Feature 5: Mean = 0.5000, Std = 0.0000
+  Min = 0.5000, Max = 0.5000
+Feature 6: Mean = 0.4905, Std = 0.4129
+  Min = 0.0000, Max = 1.0000
+
+Client Trust Scores:
+Client 0 (Malicious: NO): Trust Score = 0.6704
+Client 2 (Malicious: YES): Trust Score = 0.5558
+Client 3 (Malicious: NO): Trust Score = 0.6525
+Client 1 (Malicious: YES): Trust Score = 0.5588
+Client 4 (Malicious: NO): Trust Score = 0.6507
+
+--- Computing aggregation weights ---
+Detected client 1 as suspicious due to high gradient norm: 0.8678 (threshold: 0.7051)
+  This is 1.11 standard deviations above the mean
+Detected client 3 as suspicious due to high gradient norm: 0.9581 (threshold: 0.7051)
+  This is 1.33 standard deviations above the mean
+Applied strong penalty of 0.9800 to client 1 due to high gradient norm
+  Weight reduced from 0.5558 to 0.0111
+Applied strong penalty of 0.9800 to client 3 due to high gradient norm
+  Weight reduced from 0.5588 to 0.0112
+Applied penalties with factor 0.95 to 2 suspicious clients
+Detected 2 potential malicious clients
+Malicious client indices: [1, 3]
+Min weight: 0.1294
+Max weight: 0.2502
+Mean weight: 0.2000
+Std weight: 0.0645
+
+Trust Score Distribution:
+Mean: 0.6176
+Std: 0.0556
+Min: 0.5558
+Max: 0.6704
+
+Confidence Score Distribution:
+Mean: 0.7082
+Std: 0.0189
+Min: 0.6907
+Max: 0.7333
+
+Detected 2 potential malicious clients
+Detected malicious client IDs: [2, 1]
+Actually malicious: [2, 1]
+
+Aggregation Weights:
+Client 0 (Malicious: NO): Weight = 0.2502
+Client 2 (Malicious: YES): Weight = 0.1294
+Client 3 (Malicious: NO): Weight = 0.2457
+Client 1 (Malicious: YES): Weight = 0.1294
+Client 4 (Malicious: NO): Weight = 0.2453
+
+--- Aggregating gradients using fedbn ---
+FedBN: Identified 8 BatchNorm parameters to preserve
+
+--- Updating global model with aggregated gradient ---
+Aggregated gradient norm: 1.7037
+Updating model with gradient (norm: 1.70368981, learning rate: 0.01000000)
+FedBN: Preserving 20 BatchNorm parameters
+FedBN: Skipping update for BatchNorm parameter bn1.weight
+FedBN: Skipping update for BatchNorm parameter bn1.bias
+FedBN: Skipping update for BatchNorm parameter bn2.weight
+FedBN: Skipping update for BatchNorm parameter bn2.bias
+FedBN: Skipping update for BatchNorm parameter bn3.weight
+FedBN: Skipping update for BatchNorm parameter bn3.bias
+FedBN: Skipping update for BatchNorm parameter bn4.weight
+FedBN: Skipping update for BatchNorm parameter bn4.bias
+FedBN: Restored BatchNorm parameter bn1.weight
+FedBN: Restored BatchNorm parameter bn1.bias
+FedBN: Restored BatchNorm parameter bn2.weight
+FedBN: Restored BatchNorm parameter bn2.bias
+FedBN: Restored BatchNorm parameter bn3.weight
+FedBN: Restored BatchNorm parameter bn3.bias
+FedBN: Restored BatchNorm parameter bn4.weight
+FedBN: Restored BatchNorm parameter bn4.bias
+Model updated with total parameter change: 2.88550067
+Average parameter change: 0.00002205
+Global model parameter change: 0.00002195
+
+=== Round 2/3 ===
+
+--- Evaluating global model ---
+Test Accuracy: 0.9781, Error Rate: 0.0219
+Round 2 - Accuracy: 0.9781, Error: 0.0219
+Selected 5 clients for this round
+
+Client status:
+Client 3: HONEST
+Client 4: HONEST
+Client 0: HONEST
+Client 2: MALICIOUS
+Client 1: MALICIOUS
+
+Client 3 (Malicious: False)
+Client 3: Training for 2 local epochs
+Client 3, Epoch 1/2: Loss: 0.521648, Accuracy: 85.17%
+Client 3, Epoch 2/2: Loss: 0.287903, Accuracy: 91.42%
+Client 3: Identified BatchNorm layer: bn1
+Client 3: Identified BatchNorm layer: bn2
+Client 3: Identified BatchNorm layer: bn3
+Client 3: Identified BatchNorm layer: bn4
+Client 3: Found 4 BatchNorm layers
+Client 3: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0301
+Client 3: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0119
+Client 3: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0275
+Client 3: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0152
+Client 3: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.0811
+Client 3: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0306
+Client 3: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.2667
+Client 3: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.3570
+Raw gradient norm before clipping: 0.8777
+Client 3: BatchNorm gradient norm: 0.4563
+Client 3: BatchNorm parameters make up 0.44% of total parameters
+Client 3 gradient norm: 0.8777
+
+Raw Gradient Statistics for Client 3:
+Norm: 0.8777
+Mean: -0.0000
+Std: 0.0024
+
+Client 3 gradient features:
+  Raw gradient norm: 0.8777
+  Normalized gradient norm: 0.0878
+Client 3 gradient features:
+  Raw gradient norm: 0.8777
+  Normalized gradient norm: 0.0878
+Client 3: Gradient norm = 0.8777
+
+Client 4 (Malicious: False)
+Client 4: Training for 2 local epochs
+Client 4, Epoch 1/2: Loss: 0.251344, Accuracy: 92.92%
+Client 4, Epoch 2/2: Loss: 0.163980, Accuracy: 95.40%
+Client 4: Identified BatchNorm layer: bn1
+Client 4: Identified BatchNorm layer: bn2
+Client 4: Identified BatchNorm layer: bn3
+Client 4: Identified BatchNorm layer: bn4
+Client 4: Found 4 BatchNorm layers
+Client 4: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0170
+Client 4: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0107
+Client 4: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0368
+Client 4: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0167
+Client 4: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.0902
+Client 4: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0330
+Client 4: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.3029
+Client 4: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.4071
+Raw gradient norm before clipping: 0.9643
+Client 4: BatchNorm gradient norm: 0.5184
+Client 4: BatchNorm parameters make up 0.44% of total parameters
+Client 4 gradient norm: 0.9643
+
+Raw Gradient Statistics for Client 4:
+Norm: 0.9643
+Mean: -0.0000
+Std: 0.0027
+
+Client 4 gradient features:
+  Raw gradient norm: 0.9643
+  Normalized gradient norm: 0.0964
+Client 4 gradient features:
+  Raw gradient norm: 0.9643
+  Normalized gradient norm: 0.0964
+Client 4: Gradient norm = 0.9643
+
+Client 0 (Malicious: False)
+Client 0: Training for 2 local epochs
+Processing 1 small batches by combining them
+Client 0, Epoch 1/2: Loss: 0.376382, Accuracy: 89.16%
+Processing 1 small batches by combining them
+Client 0, Epoch 2/2: Loss: 0.183994, Accuracy: 94.50%
+Client 0: Identified BatchNorm layer: bn1
+Client 0: Identified BatchNorm layer: bn2
+Client 0: Identified BatchNorm layer: bn3
+Client 0: Identified BatchNorm layer: bn4
+Client 0: Found 4 BatchNorm layers
+Client 0: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0232
+Client 0: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0148
+Client 0: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0445
+Client 0: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0203
+Client 0: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.1073
+Client 0: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0374
+Client 0: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.3881
+Client 0: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.4954
+Raw gradient norm before clipping: 1.1643
+Client 0: BatchNorm gradient norm: 0.6419
+Client 0: BatchNorm parameters make up 0.44% of total parameters
+Client 0 gradient norm: 1.1643
+
+Raw Gradient Statistics for Client 0:
+Norm: 1.1643
+Mean: -0.0000
+Std: 0.0032
+
+Client 0 gradient features:
+  Raw gradient norm: 1.1643
+  Normalized gradient norm: 0.1164
+Client 0 gradient features:
+  Raw gradient norm: 1.1643
+  Normalized gradient norm: 0.1164
+Client 0: Gradient norm = 1.1643
+
+Client 2 (Malicious: True)
+Client 2: Training for 2 local epochs
+Client 2, Epoch 1/2: Loss: 0.861268, Accuracy: 76.78%
+Malicious client 2: Early stopping training
+Client 2, Epoch 2/2: Loss: 0.518246, Accuracy: 84.48%
+Client 2: Identified BatchNorm layer: bn1
+Client 2: Identified BatchNorm layer: bn2
+Client 2: Identified BatchNorm layer: bn3
+Client 2: Identified BatchNorm layer: bn4
+Client 2: Found 4 BatchNorm layers
+Client 2: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0141
+Client 2: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0050
+Client 2: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0206
+Client 2: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0114
+Client 2: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.0719
+Client 2: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0232
+Client 2: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.2149
+Client 2: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.2728
+Raw gradient norm before clipping: 0.6661
+Client 2: BatchNorm gradient norm: 0.3565
+Client 2: BatchNorm parameters make up 0.44% of total parameters
+Client 2 gradient norm: 0.6661
+
+Raw Gradient Statistics for Client 2:
+Norm: 0.6661
+Mean: 0.0000
+Std: 0.0018
+Client 2 (MALICIOUS): Original gradient norm before attack: 0.6661
+Partial scaling attack (factor: 20.0, 40.0% of elements) applied:
+  Original norm: 0.6661
+  Modified norm: 8.0991
+  Absolute change: 7.4329
+  Percentage change: 1115.86%
+  Cosine similarity: 0.6573
+Client 2: Applied partial_scaling_attack:
+  Original gradient norm: 0.6661
+  Modified gradient norm: 8.0991
+  Norm increased by: 7.4329 (1115.86%)
+  Gradient difference norm: 7.6776
+
+Client 2 gradient features:
+  Raw gradient norm: 8.0991
+  Normalized gradient norm: 0.8099
+  (This client is malicious)
+  Original gradient norm (before attack): 0.6661
+  Normalized original norm: 0.0666
+  Norm increase from attack: 7.4329 (1115.86%)
+Client 2 gradient features:
+  Raw gradient norm: 8.0991
+  Normalized gradient norm: 0.8099
+  Original norm (before attack): 0.6661
+  Normalized original norm: 0.0666
+  Norm increase from attack: 7.4329 (1115.86%)
+--- MALICIOUS CLIENT METRICS ---
+AFTER attack - Gradient norm: 8.0991
+BEFORE attack - Original gradient norm: 0.6661
+Increase from attack: 7.4329 (1115.86%)
+Client 2: Gradient norm = 8.0991
+
+Client 1 (Malicious: True)
+Client 1: Training for 2 local epochs
+Client 1, Epoch 1/2: Loss: 0.212603, Accuracy: 93.76%
+Malicious client 1: Early stopping training
+Client 1, Epoch 2/2: Loss: 0.143179, Accuracy: 95.46%
+Client 1: Identified BatchNorm layer: bn1
+Client 1: Identified BatchNorm layer: bn2
+Client 1: Identified BatchNorm layer: bn3
+Client 1: Identified BatchNorm layer: bn4
+Client 1: Found 4 BatchNorm layers
+Client 1: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0165
+Client 1: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0117
+Client 1: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0404
+Client 1: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0150
+Client 1: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.0711
+Client 1: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0280
+Client 1: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.2231
+Client 1: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.2727
+Raw gradient norm before clipping: 0.7808
+Client 1: BatchNorm gradient norm: 0.3637
+Client 1: BatchNorm parameters make up 0.44% of total parameters
+Client 1 gradient norm: 0.7808
+
+Raw Gradient Statistics for Client 1:
+Norm: 0.7808
+Mean: -0.0000
+Std: 0.0022
+Client 1 (MALICIOUS): Original gradient norm before attack: 0.7808
+Partial scaling attack (factor: 20.0, 40.0% of elements) applied:
+  Original norm: 0.7808
+  Modified norm: 9.7857
+  Absolute change: 9.0049
+  Percentage change: 1153.23%
+  Cosine similarity: 0.6728
+Client 1: Applied partial_scaling_attack:
+  Original gradient norm: 0.7808
+  Modified gradient norm: 9.7857
+  Norm increased by: 9.0049 (1153.23%)
+  Gradient difference norm: 9.2784
+
+Client 1 gradient features:
+  Raw gradient norm: 9.7857
+  Normalized gradient norm: 0.9786
+  (This client is malicious)
+  Original gradient norm (before attack): 0.7808
+  Normalized original norm: 0.0781
+  Norm increase from attack: 9.0049 (1153.23%)
+Client 1 gradient features:
+  Raw gradient norm: 9.7857
+  Normalized gradient norm: 0.9786
+  Original norm (before attack): 0.7808
+  Normalized original norm: 0.0781
+  Norm increase from attack: 9.0049 (1153.23%)
+--- MALICIOUS CLIENT METRICS ---
+AFTER attack - Gradient norm: 9.7857
+BEFORE attack - Original gradient norm: 0.7808
+Increase from attack: 9.0049 (1153.23%)
+Client 1: Gradient norm = 9.7857
+
+--- Computing Shapley values ---
+Calculating Shapley values for 5 clients
+Baseline model performance: 0.9800
+
+Monte Carlo sample 1/5
+Updating model with gradient (norm: 9.78570652, learning rate: 0.01000000)
+Updating model with gradient (norm: 9.78570652, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 4.97890329, learning rate: 0.01000000)
+Updating model with gradient (norm: 4.97890329, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 4.43908930, learning rate: 0.01000000)
+Updating model with gradient (norm: 4.43908930, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.29728365, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.29728365, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.59171343, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.59171343, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+
+Monte Carlo sample 2/5
+Updating model with gradient (norm: 9.78570652, learning rate: 0.01000000)
+Updating model with gradient (norm: 9.78570652, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 4.80085468, learning rate: 0.01000000)
+Updating model with gradient (norm: 4.80085468, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.25199938, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.25199938, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.27175856, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.27175856, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.59171343, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.59171343, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+
+Monte Carlo sample 3/5
+Updating model with gradient (norm: 8.09906006, learning rate: 0.01000000)
+Updating model with gradient (norm: 8.09906006, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 4.01322460, learning rate: 0.01000000)
+Updating model with gradient (norm: 4.01322460, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 4.26076508, learning rate: 0.01000000)
+Updating model with gradient (norm: 4.26076508, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.27175856, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.27175856, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.59171343, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.59171343, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+
+Monte Carlo sample 4/5
+Updating model with gradient (norm: 1.16434097, learning rate: 0.01000000)
+Updating model with gradient (norm: 1.16434097, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 0.61714184, learning rate: 0.01000000)
+Updating model with gradient (norm: 0.61714184, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.29538417, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.29538417, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.42136264, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.42136264, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.59171343, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.59171343, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+
+Monte Carlo sample 5/5
+Updating model with gradient (norm: 8.09906006, learning rate: 0.01000000)
+Updating model with gradient (norm: 8.09906006, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 4.22083759, learning rate: 0.01000000)
+Updating model with gradient (norm: 4.22083759, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.78248119, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.78248119, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.27175856, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.27175856, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.59171343, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.59171343, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+Applied small random perturbation to differentiate similar Shapley values
+
+Shapley Value Results:
+Client 0: Raw = 0.000000, Normalized = 1.0000
+Client 1: Raw = 0.000000, Normalized = 0.0000
+Client 2: Raw = 0.000000, Normalized = 0.5556
+Client 3: Raw = 0.000000, Normalized = 0.8702
+Client 4: Raw = 0.000000, Normalized = 0.1740
+
+Shapley values:
+Client 3 (Malicious: NO): Shapley value = 1.0000
+Client 4 (Malicious: NO): Shapley value = 0.0000
+Client 0 (Malicious: NO): Shapley value = 0.5556
+Client 2 (Malicious: YES): Shapley value = 0.8702
+Client 1 (Malicious: YES): Shapley value = 0.1740
+Updated 6th feature with Shapley values
+
+--- Computing trust scores with dual attention ---
+
+Feature statistics before processing:
+Feature 1: Mean = 0.5000, Std = 0.0000
+  Min = 0.5000, Max = 0.5000
+Feature 2: Mean = 0.5000, Std = 0.0000
+  Min = 0.5000, Max = 0.5000
+Feature 3: Mean = 0.5000, Std = 0.0000
+  Min = 0.5000, Max = 0.5000
+Feature 4: Mean = 0.4178, Std = 0.4391
+  Min = 0.0878, Max = 0.9786
+Feature 5: Mean = 0.5000, Std = 0.0000
+  Min = 0.5000, Max = 0.5000
+Feature 6: Mean = 0.5200, Std = 0.4314
+  Min = 0.0000, Max = 1.0000
+
+Client Trust Scores:
+Client 3 (Malicious: NO): Trust Score = 0.6887
+Client 4 (Malicious: NO): Trust Score = 0.6513
+Client 0 (Malicious: NO): Trust Score = 0.6701
+Client 2 (Malicious: YES): Trust Score = 0.5767
+Client 1 (Malicious: YES): Trust Score = 0.5330
+
+--- Computing aggregation weights ---
+Detected client 3 as suspicious due to high gradient norm: 0.8099 (threshold: 0.6927)
+  This is 1.00 standard deviations above the mean
+Detected client 4 as suspicious due to high gradient norm: 0.9786 (threshold: 0.6927)
+  This is 1.43 standard deviations above the mean
+Applied strong penalty of 0.9800 to client 3 due to high gradient norm
+  Weight reduced from 0.5767 to 0.0115
+Applied strong penalty of 0.9800 to client 4 due to high gradient norm
+  Weight reduced from 0.5330 to 0.0107
+Applied penalties with factor 0.95 to 2 suspicious clients
+Detected 2 potential malicious clients
+Malicious client indices: [3, 4]
+Min weight: 0.1282
+Max weight: 0.2525
+Mean weight: 0.2000
+Std weight: 0.0656
+
+Trust Score Distribution:
+Mean: 0.6240
+Std: 0.0663
+Min: 0.5330
+Max: 0.6887
+
+Confidence Score Distribution:
+Mean: 0.7201
+Std: 0.0211
+Min: 0.7017
+Max: 0.7548
+
+Detected 2 potential malicious clients
+Detected malicious client IDs: [2, 1]
+Actually malicious: [2, 1]
+
+Aggregation Weights:
+Client 3 (Malicious: NO): Weight = 0.2525
+Client 4 (Malicious: NO): Weight = 0.2432
+Client 0 (Malicious: NO): Weight = 0.2478
+Client 2 (Malicious: YES): Weight = 0.1283
+Client 1 (Malicious: YES): Weight = 0.1282
+
+--- Aggregating gradients using fedbn ---
+FedBN: Identified 8 BatchNorm parameters to preserve
+
+--- Updating global model with aggregated gradient ---
+Aggregated gradient norm: 1.6771
+Updating model with gradient (norm: 1.67706275, learning rate: 0.01000000)
+FedBN: Preserving 20 BatchNorm parameters
+FedBN: Skipping update for BatchNorm parameter bn1.weight
+FedBN: Skipping update for BatchNorm parameter bn1.bias
+FedBN: Skipping update for BatchNorm parameter bn2.weight
+FedBN: Skipping update for BatchNorm parameter bn2.bias
+FedBN: Skipping update for BatchNorm parameter bn3.weight
+FedBN: Skipping update for BatchNorm parameter bn3.bias
+FedBN: Skipping update for BatchNorm parameter bn4.weight
+FedBN: Skipping update for BatchNorm parameter bn4.bias
+FedBN: Restored BatchNorm parameter bn1.weight
+FedBN: Restored BatchNorm parameter bn1.bias
+FedBN: Restored BatchNorm parameter bn2.weight
+FedBN: Restored BatchNorm parameter bn2.bias
+FedBN: Restored BatchNorm parameter bn3.weight
+FedBN: Restored BatchNorm parameter bn3.bias
+FedBN: Restored BatchNorm parameter bn4.weight
+FedBN: Restored BatchNorm parameter bn4.bias
+Model updated with total parameter change: 2.84253574
+Average parameter change: 0.00002172
+Global model parameter change: 0.00002162
+
+=== Round 3/3 ===
+
+--- Evaluating global model ---
+Test Accuracy: 0.9781, Error Rate: 0.0219
+Round 3 - Accuracy: 0.9781, Error: 0.0219
+Selected 5 clients for this round
+
+Client status:
+Client 4: HONEST
+Client 3: HONEST
+Client 0: HONEST
+Client 2: MALICIOUS
+Client 1: MALICIOUS
+
+Client 4 (Malicious: False)
+Client 4: Training for 2 local epochs
+Client 4, Epoch 1/2: Loss: 0.253309, Accuracy: 92.70%
+Client 4, Epoch 2/2: Loss: 0.165497, Accuracy: 95.31%
+Client 4: Identified BatchNorm layer: bn1
+Client 4: Identified BatchNorm layer: bn2
+Client 4: Identified BatchNorm layer: bn3
+Client 4: Identified BatchNorm layer: bn4
+Client 4: Found 4 BatchNorm layers
+Client 4: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0196
+Client 4: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0100
+Client 4: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0386
+Client 4: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0153
+Client 4: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.0924
+Client 4: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0300
+Client 4: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.3013
+Client 4: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.4097
+Raw gradient norm before clipping: 0.9676
+Client 4: BatchNorm gradient norm: 0.5199
+Client 4: BatchNorm parameters make up 0.44% of total parameters
+Client 4 gradient norm: 0.9676
+
+Raw Gradient Statistics for Client 4:
+Norm: 0.9676
+Mean: -0.0000
+Std: 0.0027
+
+Client 4 gradient features:
+  Raw gradient norm: 0.9676
+  Normalized gradient norm: 0.0968
+Client 4 gradient features:
+  Raw gradient norm: 0.9676
+  Normalized gradient norm: 0.0968
+Client 4: Gradient norm = 0.9676
+
+Client 3 (Malicious: False)
+Client 3: Training for 2 local epochs
+Client 3, Epoch 1/2: Loss: 0.526511, Accuracy: 85.22%
+Client 3, Epoch 2/2: Loss: 0.311834, Accuracy: 91.17%
+Client 3: Identified BatchNorm layer: bn1
+Client 3: Identified BatchNorm layer: bn2
+Client 3: Identified BatchNorm layer: bn3
+Client 3: Identified BatchNorm layer: bn4
+Client 3: Found 4 BatchNorm layers
+Client 3: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0277
+Client 3: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0111
+Client 3: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0285
+Client 3: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0159
+Client 3: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.0797
+Client 3: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0295
+Client 3: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.2723
+Client 3: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.3627
+Raw gradient norm before clipping: 0.8913
+Client 3: BatchNorm gradient norm: 0.4636
+Client 3: BatchNorm parameters make up 0.44% of total parameters
+Client 3 gradient norm: 0.8913
+
+Raw Gradient Statistics for Client 3:
+Norm: 0.8913
+Mean: -0.0000
+Std: 0.0025
+
+Client 3 gradient features:
+  Raw gradient norm: 0.8913
+  Normalized gradient norm: 0.0891
+Client 3 gradient features:
+  Raw gradient norm: 0.8913
+  Normalized gradient norm: 0.0891
+Client 3: Gradient norm = 0.8913
+
+Client 0 (Malicious: False)
+Client 0: Training for 2 local epochs
+Processing 1 small batches by combining them
+Client 0, Epoch 1/2: Loss: 0.387235, Accuracy: 88.96%
+Processing 1 small batches by combining them
+Client 0, Epoch 2/2: Loss: 0.186148, Accuracy: 94.45%
+Client 0: Identified BatchNorm layer: bn1
+Client 0: Identified BatchNorm layer: bn2
+Client 0: Identified BatchNorm layer: bn3
+Client 0: Identified BatchNorm layer: bn4
+Client 0: Found 4 BatchNorm layers
+Client 0: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0204
+Client 0: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0169
+Client 0: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0490
+Client 0: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0214
+Client 0: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.1037
+Client 0: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0400
+Client 0: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.3906
+Client 0: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.4963
+Raw gradient norm before clipping: 1.1619
+Client 0: BatchNorm gradient norm: 0.6440
+Client 0: BatchNorm parameters make up 0.44% of total parameters
+Client 0 gradient norm: 1.1619
+
+Raw Gradient Statistics for Client 0:
+Norm: 1.1619
+Mean: -0.0000
+Std: 0.0032
+
+Client 0 gradient features:
+  Raw gradient norm: 1.1619
+  Normalized gradient norm: 0.1162
+Client 0 gradient features:
+  Raw gradient norm: 1.1619
+  Normalized gradient norm: 0.1162
+Client 0: Gradient norm = 1.1619
+
+Client 2 (Malicious: True)
+Client 2: Training for 2 local epochs
+Client 2, Epoch 1/2: Loss: 0.845461, Accuracy: 77.03%
+Malicious client 2: Early stopping training
+Client 2, Epoch 2/2: Loss: 0.535853, Accuracy: 85.42%
+Client 2: Identified BatchNorm layer: bn1
+Client 2: Identified BatchNorm layer: bn2
+Client 2: Identified BatchNorm layer: bn3
+Client 2: Identified BatchNorm layer: bn4
+Client 2: Found 4 BatchNorm layers
+Client 2: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0167
+Client 2: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0072
+Client 2: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0196
+Client 2: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0114
+Client 2: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.0726
+Client 2: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0232
+Client 2: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.2169
+Client 2: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.2751
+Raw gradient norm before clipping: 0.6749
+Client 2: BatchNorm gradient norm: 0.3597
+Client 2: BatchNorm parameters make up 0.44% of total parameters
+Client 2 gradient norm: 0.6749
+
+Raw Gradient Statistics for Client 2:
+Norm: 0.6749
+Mean: 0.0000
+Std: 0.0019
+Client 2 (MALICIOUS): Original gradient norm before attack: 0.6749
+Partial scaling attack (factor: 20.0, 40.0% of elements) applied:
+  Original norm: 0.6749
+  Modified norm: 8.8336
+  Absolute change: 8.1587
+  Percentage change: 1208.87%
+  Cosine similarity: 0.6960
+Client 2: Applied partial_scaling_attack:
+  Original gradient norm: 0.6749
+  Modified gradient norm: 8.8336
+  Norm increased by: 8.1587 (1208.87%)
+  Gradient difference norm: 8.3778
+
+Client 2 gradient features:
+  Raw gradient norm: 8.8336
+  Normalized gradient norm: 0.8834
+  (This client is malicious)
+  Original gradient norm (before attack): 0.6749
+  Normalized original norm: 0.0675
+  Norm increase from attack: 8.1587 (1208.87%)
+Client 2 gradient features:
+  Raw gradient norm: 8.8336
+  Normalized gradient norm: 0.8834
+  Original norm (before attack): 0.6749
+  Normalized original norm: 0.0675
+  Norm increase from attack: 8.1587 (1208.87%)
+--- MALICIOUS CLIENT METRICS ---
+AFTER attack - Gradient norm: 8.8336
+BEFORE attack - Original gradient norm: 0.6749
+Increase from attack: 8.1587 (1208.87%)
+Client 2: Gradient norm = 8.8336
+
+Client 1 (Malicious: True)
+Client 1: Training for 2 local epochs
+Client 1, Epoch 1/2: Loss: 0.207234, Accuracy: 93.79%
+Malicious client 1: Early stopping training
+Client 1, Epoch 2/2: Loss: 0.142903, Accuracy: 95.92%
+Client 1: Identified BatchNorm layer: bn1
+Client 1: Identified BatchNorm layer: bn2
+Client 1: Identified BatchNorm layer: bn3
+Client 1: Identified BatchNorm layer: bn4
+Client 1: Found 4 BatchNorm layers
+Client 1: Preserving BatchNorm gradient for bn1.weight
+  Gradient norm: 0.0166
+Client 1: Preserving BatchNorm gradient for bn1.bias
+  Gradient norm: 0.0114
+Client 1: Preserving BatchNorm gradient for bn2.weight
+  Gradient norm: 0.0398
+Client 1: Preserving BatchNorm gradient for bn2.bias
+  Gradient norm: 0.0140
+Client 1: Preserving BatchNorm gradient for bn3.weight
+  Gradient norm: 0.0754
+Client 1: Preserving BatchNorm gradient for bn3.bias
+  Gradient norm: 0.0281
+Client 1: Preserving BatchNorm gradient for bn4.weight
+  Gradient norm: 0.2215
+Client 1: Preserving BatchNorm gradient for bn4.bias
+  Gradient norm: 0.2736
+Raw gradient norm before clipping: 0.7857
+Client 1: BatchNorm gradient norm: 0.3641
+Client 1: BatchNorm parameters make up 0.44% of total parameters
+Client 1 gradient norm: 0.7857
+
+Raw Gradient Statistics for Client 1:
+Norm: 0.7857
+Mean: -0.0000
+Std: 0.0022
+Client 1 (MALICIOUS): Original gradient norm before attack: 0.7857
+Partial scaling attack (factor: 20.0, 40.0% of elements) applied:
+  Original norm: 0.7857
+  Modified norm: 9.9754
+  Absolute change: 9.1896
+  Percentage change: 1169.59%
+  Cosine similarity: 0.6796
+Client 1: Applied partial_scaling_attack:
+  Original gradient norm: 0.7857
+  Modified gradient norm: 9.9754
+  Norm increased by: 9.1896 (1169.59%)
+  Gradient difference norm: 9.4590
+
+Client 1 gradient features:
+  Raw gradient norm: 9.9754
+  Normalized gradient norm: 0.9975
+  (This client is malicious)
+  Original gradient norm (before attack): 0.7857
+  Normalized original norm: 0.0786
+  Norm increase from attack: 9.1896 (1169.59%)
+Client 1 gradient features:
+  Raw gradient norm: 9.9754
+  Normalized gradient norm: 0.9975
+  Original norm (before attack): 0.7857
+  Normalized original norm: 0.0786
+  Norm increase from attack: 9.1896 (1169.59%)
+--- MALICIOUS CLIENT METRICS ---
+AFTER attack - Gradient norm: 9.9754
+BEFORE attack - Original gradient norm: 0.7857
+Increase from attack: 9.1896 (1169.59%)
+Client 1: Gradient norm = 9.9754
+
+--- Computing Shapley values ---
+Calculating Shapley values for 5 clients
+Baseline model performance: 0.9800
+
+Monte Carlo sample 1/5
+Updating model with gradient (norm: 0.96761405, learning rate: 0.01000000)
+Updating model with gradient (norm: 0.96761405, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 0.57475048, learning rate: 0.01000000)
+Updating model with gradient (norm: 0.57475048, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.03014612, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.03014612, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.25035214, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.25035214, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.68069983, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.68069983, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+
+Monte Carlo sample 2/5
+Updating model with gradient (norm: 9.97535610, learning rate: 0.01000000)
+Updating model with gradient (norm: 9.97535610, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 5.07380247, learning rate: 0.01000000)
+Updating model with gradient (norm: 5.07380247, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.34814048, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.34814048, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.46293473, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.46293473, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.68069983, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.68069983, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+
+Monte Carlo sample 3/5
+Updating model with gradient (norm: 8.83355999, learning rate: 0.01000000)
+Updating model with gradient (norm: 8.83355999, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 4.38660192, learning rate: 0.01000000)
+Updating model with gradient (norm: 4.38660192, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 4.43914318, learning rate: 0.01000000)
+Updating model with gradient (norm: 4.43914318, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.41269064, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.41269064, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.68069983, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.68069983, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+
+Monte Carlo sample 4/5
+Updating model with gradient (norm: 8.83355999, learning rate: 0.01000000)
+Updating model with gradient (norm: 8.83355999, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 4.38660192, learning rate: 0.01000000)
+Updating model with gradient (norm: 4.38660192, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.04205370, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.04205370, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.25035214, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.25035214, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.68069983, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.68069983, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+
+Monte Carlo sample 5/5
+Updating model with gradient (norm: 9.97535610, learning rate: 0.01000000)
+Updating model with gradient (norm: 9.97535610, learning rate: 0.01000000)
+  Client 4: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 5.07380247, learning rate: 0.01000000)
+Updating model with gradient (norm: 5.07380247, learning rate: 0.01000000)
+  Client 1: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 3.34814048, learning rate: 0.01000000)
+Updating model with gradient (norm: 3.34814048, learning rate: 0.01000000)
+  Client 2: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.46293473, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.46293473, learning rate: 0.01000000)
+  Client 0: Marginal contribution = 0.000000, Performance = 0.9800
+Updating model with gradient (norm: 2.68069983, learning rate: 0.01000000)
+Updating model with gradient (norm: 2.68069983, learning rate: 0.01000000)
+  Client 3: Marginal contribution = 0.000000, Performance = 0.9800
+Applied small random perturbation to differentiate similar Shapley values
+
+Shapley Value Results:
+Client 0: Raw = 0.000000, Normalized = 0.7386
+Client 1: Raw = 0.000000, Normalized = 0.0000
+Client 2: Raw = 0.000000, Normalized = 0.1974
+Client 3: Raw = 0.000000, Normalized = 0.5081
+Client 4: Raw = 0.000000, Normalized = 1.0000
+
+Shapley values:
+Client 4 (Malicious: NO): Shapley value = 0.7386
+Client 3 (Malicious: NO): Shapley value = 0.0000
+Client 0 (Malicious: NO): Shapley value = 0.1974
+Client 2 (Malicious: YES): Shapley value = 0.5081
+Client 1 (Malicious: YES): Shapley value = 1.0000
+Updated 6th feature with Shapley values
+
+--- Computing trust scores with dual attention ---
+
+Feature statistics before processing:
+Feature 1: Mean = 0.5000, Std = 0.0000
+  Min = 0.5000, Max = 0.5000
+Feature 2: Mean = 0.5000, Std = 0.0000
+  Min = 0.5000, Max = 0.5000
+Feature 3: Mean = 0.5000, Std = 0.0000
+  Min = 0.5000, Max = 0.5000
+Feature 4: Mean = 0.4366, Std = 0.4618
+  Min = 0.0891, Max = 0.9975
+Feature 5: Mean = 0.5000, Std = 0.0000
+  Min = 0.5000, Max = 0.5000
+Feature 6: Mean = 0.4888, Std = 0.4025
+  Min = 0.0000, Max = 1.0000
+
+Client Trust Scores:
+Client 4 (Malicious: NO): Trust Score = 0.6760
+Client 3 (Malicious: NO): Trust Score = 0.6507
+Client 0 (Malicious: NO): Trust Score = 0.6510
+Client 2 (Malicious: YES): Trust Score = 0.5488
+Client 1 (Malicious: YES): Trust Score = 0.5569
+
+--- Computing aggregation weights ---
+Detected client 3 as suspicious due to high gradient norm: 0.8834 (threshold: 0.7257)
+  This is 1.08 standard deviations above the mean
+Detected client 4 as suspicious due to high gradient norm: 0.9975 (threshold: 0.7257)
+  This is 1.36 standard deviations above the mean
+Applied strong penalty of 0.9800 to client 3 due to high gradient norm
+  Weight reduced from 0.5488 to 0.0110
+Applied strong penalty of 0.9800 to client 4 due to high gradient norm
+  Weight reduced from 0.5569 to 0.0111
+Applied penalties with factor 0.95 to 2 suspicious clients
+Detected 2 potential malicious clients
+Malicious client indices: [3, 4]
+Min weight: 0.1292
+Max weight: 0.2513
+Mean weight: 0.2000
+Std weight: 0.0646
+
+Trust Score Distribution:
+Mean: 0.6167
+Std: 0.0593
+Min: 0.5488
+Max: 0.6760
+
+Confidence Score Distribution:
+Mean: 0.7107
+Std: 0.0189
+Min: 0.6928
+Max: 0.7372
+
+Detected 2 potential malicious clients
+Detected malicious client IDs: [2, 1]
+Actually malicious: [2, 1]
+
+Aggregation Weights:
+Client 4 (Malicious: NO): Weight = 0.2513
+Client 3 (Malicious: NO): Weight = 0.2450
+Client 0 (Malicious: NO): Weight = 0.2451
+Client 2 (Malicious: YES): Weight = 0.1292
+Client 1 (Malicious: YES): Weight = 0.1293
+
+--- Aggregating gradients using fedbn ---
+FedBN: Identified 8 BatchNorm parameters to preserve
+
+--- Updating global model with aggregated gradient ---
+Aggregated gradient norm: 1.7420
+Updating model with gradient (norm: 1.74200165, learning rate: 0.01000000)
+FedBN: Preserving 20 BatchNorm parameters
+FedBN: Skipping update for BatchNorm parameter bn1.weight
+FedBN: Skipping update for BatchNorm parameter bn1.bias
+FedBN: Skipping update for BatchNorm parameter bn2.weight
+FedBN: Skipping update for BatchNorm parameter bn2.bias
+FedBN: Skipping update for BatchNorm parameter bn3.weight
+FedBN: Skipping update for BatchNorm parameter bn3.bias
+FedBN: Skipping update for BatchNorm parameter bn4.weight
+FedBN: Skipping update for BatchNorm parameter bn4.bias
+FedBN: Restored BatchNorm parameter bn1.weight
+FedBN: Restored BatchNorm parameter bn1.bias
+FedBN: Restored BatchNorm parameter bn2.weight
+FedBN: Restored BatchNorm parameter bn2.bias
+FedBN: Restored BatchNorm parameter bn3.weight
+FedBN: Restored BatchNorm parameter bn3.bias
+FedBN: Restored BatchNorm parameter bn4.weight
+FedBN: Restored BatchNorm parameter bn4.bias
+Model updated with total parameter change: 2.88382435
+Average parameter change: 0.00002203
+Global model parameter change: 0.00002194
+
+=== Final Model Evaluation ===
+Test Accuracy: 0.9782, Error Rate: 0.0218
+Final test accuracy: 0.9782, error: 0.0218
+Improvement: 0.0002
+Final global model saved to 'model_weights/final_global_model.pth'
+Training progress plot saved as 'training_progress_20250515_194359.png'
+
+--- Saving and plotting results ---
+
+--- Federated learning completed successfully ---
+
+====== DETECTION SUMMARY ======
+
+!!! Error during federated learning: '2'
