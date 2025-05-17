@@ -21,6 +21,13 @@ wheels/
 *.egg
 archived/*
 __pycache__/*
+# ignore all data, models, logs and generated images
+data/
+model_weights/
+logs/
+training_progress_*.png
+test_results/plots/
+
 *.png
 *.pth
 *.jpg
