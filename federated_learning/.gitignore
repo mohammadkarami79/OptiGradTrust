@@ -19,7 +19,11 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-
+archived/*
+__pycache__/*
+*.png
+*.pth
+*.jpg
 # Virtual Environment
 venv/
 ENV/
