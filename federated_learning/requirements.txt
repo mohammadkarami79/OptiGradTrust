@@ -4,4 +4,5 @@ numpy>=1.21.0
 pillow>=8.0.0
 tqdm>=4.65.0  # for progress bars
 matplotlib>=3.5.0  # for plotting results
-scikit-learn>=1.0.0  # for metrics and evaluation 
+scikit-learn>=1.0.0  # for metrics and evaluation
+phe>=1.5.0  # Python Paillier Homomorphic Encryption library 

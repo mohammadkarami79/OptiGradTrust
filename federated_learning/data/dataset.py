@@ -4,6 +4,8 @@ from torchvision import datasets, transforms
 import random
 import numpy as np
 from federated_learning.config.config import *
+from federated_learning.data.alzheimer_dataset import load_alzheimer_dataset, download_alzheimer_dataset
+from federated_learning.data.cifar_dataset import load_cifar10_dataset
 
 class LabelFlippingDataset(Dataset):
     """
@@ -225,41 +227,148 @@ class GradientInversionAttackDataset(Dataset):
         return data, modified_target
 
 def load_dataset():
+    """Load and prepare the dataset based on configuration."""
+    print(f"\nLoading {DATASET} dataset...")
+    
     if DATASET == 'MNIST':
+        # Ensure data directory exists
+        import os
+        os.makedirs('data/mnist', exist_ok=True)
+        
+        # Define transformations
         transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize((0.1307,), (0.3081,))
         ])
-        full_dataset = datasets.MNIST('./data', train=True, download=True, transform=transform)
-        test_dataset = datasets.MNIST('./data', train=False, download=True, transform=transform)
-        num_classes = 10
-        input_channels = 1
+        
+        try:
+            # Download and load training data
+            train_dataset = datasets.MNIST(
+                root='data/mnist',
+                train=True,
+                download=True,
+                transform=transform
+            )
+            
+            # Load test data
+            test_dataset = datasets.MNIST(
+                root='data/mnist',
+                train=False,
+                download=True,
+                transform=transform
+            )
+            
+            num_classes = 10
+            input_channels = 1
+        except OSError as e:
+            print(f"Error loading MNIST: {e}")
+            print("Trying alternative path...")
+            
+            # Try with absolute path
+            import os
+            abs_path = os.path.abspath('data/mnist')
+            print(f"Using absolute path: {abs_path}")
+            
+            train_dataset = datasets.MNIST(
+                root=abs_path,
+                train=True,
+                download=True,
+                transform=transform
+            )
+            
+            test_dataset = datasets.MNIST(
+                root=abs_path,
+                train=False,
+                download=True,
+                transform=transform
+            )
+            
+            num_classes = 10
+            input_channels = 1
+            
+    elif DATASET == 'ALZHEIMER':
+        train_dataset, test_dataset, num_classes, input_channels = load_alzheimer_dataset()
+    elif DATASET == 'CIFAR10':
+        train_dataset, test_dataset, num_classes, input_channels = load_cifar10_dataset()
     else:
-        raise ValueError("Unknown dataset")
-    return full_dataset, test_dataset, num_classes, input_channels
+        raise ValueError(f"Unknown dataset: {DATASET}")
+    
+    print(f"Dataset loaded: {len(train_dataset)} training samples, {len(test_dataset)} test samples")
+    print(f"Number of classes: {num_classes}, Input channels: {input_channels}")
+    
+    return train_dataset, test_dataset, num_classes, input_channels
 
 def split_dataset_non_iid(dataset, num_classes):
     """
     Non-IID (Label Skew): Clients have data biased towards certain classes.
-    Uses the existing implementation where clients are grouped by classes.
+    Uses the label skew approach to create non-IID distribution.
+    Works with any number of classes and clients.
     """
+    # Initialize empty list for each client
     client_datasets = [[] for _ in range(NUM_CLIENTS)]
+    
+    # Group indices by class
     class_indices = [[] for _ in range(num_classes)]
     for idx, (_, label) in enumerate(dataset):
         class_indices[label].append(idx)
+    
+    # Shuffle indices within each class
     for c in range(num_classes):
         random.shuffle(class_indices[c])
-    clients_per_group = NUM_CLIENTS // num_classes
+    
+    # Handle both cases: more clients than classes or more classes than clients
+    if NUM_CLIENTS <= num_classes:
+        # Assign each client a primary class
+        classes_per_client = 1
+        clients_per_class = max(1, NUM_CLIENTS // num_classes)  # At least 1 client per class
+    else:
+        # Assign each client multiple primary classes
+        classes_per_client = max(1, num_classes // NUM_CLIENTS)  # At least 1 class per client
+        clients_per_class = 1
+    
+    # Create a mapping of classes to their "preferred" clients
+    class_to_clients = {}
     for c in range(num_classes):
-        group_clients = list(range(c * clients_per_group, (c + 1) * clients_per_group))
-        other_clients = [i for i in range(NUM_CLIENTS) if i not in group_clients]
+        # Calculate start and end indices for clients that prefer this class
+        start_client = (c * clients_per_class) % NUM_CLIENTS
+        end_client = min(start_client + clients_per_class, NUM_CLIENTS)
+        
+        # Assign these clients to the class
+        class_to_clients[c] = list(range(start_client, end_client))
+        if not class_to_clients[c]:  # Ensure each class has at least one client
+            class_to_clients[c] = [c % NUM_CLIENTS]
+    
+    # Distribute class samples according to Q parameter
+    for c in range(num_classes):
+        preferred_clients = class_to_clients[c]
+        other_clients = [i for i in range(NUM_CLIENTS) if i not in preferred_clients]
+        
         for idx in class_indices[c]:
             if random.random() < Q:
-                client_id = random.choice(group_clients)
+                # Assign to a preferred client for this class
+                client_id = random.choice(preferred_clients)
             else:
-                client_id = random.choice(other_clients)
+                # Assign to a non-preferred client
+                if other_clients:
+                    client_id = random.choice(other_clients)
+                else:
+                    # If no other clients, assign to a preferred one
+                    client_id = random.choice(preferred_clients)
+            
+            # Add the index to the chosen client's dataset
             client_datasets[client_id].append(idx)
+    
+    # Convert to PyTorch Subset format
     client_datasets = [torch.utils.data.Subset(dataset, indices) for indices in client_datasets]
+    
+    # Print statistics about the data distribution
+    print("\n=== Data Distribution Statistics ===")
+    print(f"Distribution Type: Non-IID (Label Skew) with Q={Q}")
+    for i, client_dataset in enumerate(client_datasets):
+        labels = [dataset[idx][1] for idx in client_dataset.indices]
+        label_counts = {c: labels.count(c) for c in range(num_classes)}
+        print(f"Client {i}: {len(client_dataset)} samples, Label distribution: {label_counts}")
+    
     return client_datasets
 
 def split_dataset_iid(dataset, num_classes):
@@ -375,15 +484,34 @@ def split_dataset(dataset, num_classes, distribution_type=None):
         raise ValueError(f"Unknown distribution type: {distribution_type}")
 
 def create_root_dataset(full_dataset, num_classes):
+    """
+    Create a root dataset based on configuration parameters.
+    
+    Args:
+        full_dataset: The full dataset to sample from
+        num_classes: Number of classes in the dataset
+        
+    Returns:
+        A subset of the full dataset to be used as the root dataset
+    """
+    # Determine root dataset size (either fixed or dynamic based on dataset size)
+    if ROOT_DATASET_DYNAMIC_SIZE:
+        root_size = int(len(full_dataset) * ROOT_DATASET_RATIO)
+        print(f"Using dynamic root dataset size: {root_size} samples ({ROOT_DATASET_RATIO*100:.1f}% of total)")
+    else:
+        root_size = ROOT_DATASET_SIZE
+        print(f"Using fixed root dataset size: {root_size} samples")
+    
     if BIAS_PROBABILITY == 1.0:
         biased_indices = [i for i, (_, label) in enumerate(full_dataset) if label == BIAS_CLASS]
-        root_indices = random.sample(biased_indices, ROOT_DATASET_SIZE)
+        root_indices = random.sample(biased_indices, min(root_size, len(biased_indices)))
     else:
-        biased_size = int(ROOT_DATASET_SIZE * BIAS_PROBABILITY)
-        unbiased_size = ROOT_DATASET_SIZE - biased_size
+        biased_size = int(root_size * BIAS_PROBABILITY)
+        unbiased_size = root_size - biased_size
         biased_indices = [i for i, (_, label) in enumerate(full_dataset) if label == BIAS_CLASS]
         unbiased_indices = [i for i, (_, label) in enumerate(full_dataset) if label != BIAS_CLASS]
         root_indices = random.sample(biased_indices, min(biased_size, len(biased_indices))) + \
                        random.sample(unbiased_indices, min(unbiased_size, len(unbiased_indices)))
+    
     root_dataset = torch.utils.data.Subset(full_dataset, root_indices)
     return root_dataset 

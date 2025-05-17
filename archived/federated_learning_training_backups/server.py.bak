@@ -1,0 +1,127 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
+import random
+import copy
+from typing import List, Dict, Tuple, Optional
+from federated_learning.config.config import *
+from federated_learning.models.vae import VAE
+from federated_learning.models.attention import DualAttention
+from federated_learning.training.aggregators import create_aggregator
+from federated_learning.training.training_utils import train_vae, train_dual_attention, test, client_update
+from federated_learning.data.dataset import load_dataset, split_dataset, create_root_dataset
+
+class Server:
+    def __init__(self, root_dataset, client_datasets, test_dataset, num_classes):
+        self.root_dataset = root_dataset
+        self.client_datasets = client_datasets
+        self.test_dataset = test_dataset
+        self.num_classes = num_classes
+        self.clients = {}
+        self.global_model = None
+        self.vae = None
+        self.dual_attention = None
+        self.dimension_reducer = None
+        self.malicious_threshold = MALICIOUS_THRESHOLD
+        self.client_feature_history = {}
+        
+        # Initialize models and clients
+        self._initialize_models()
+        self._initialize_clients()
+    
+    def _collect_root_gradients(self) -> List[torch.Tensor]:
+        """Collect gradients from root model training"""
+        try:
+            root_gradients = []
+            current_chunk_gradients = []
+            current_chunk_size = 0
+            total_chunks_collected = 0
+            
+            # Create a copy of the global model for root training
+            root_model = copy.deepcopy(self.global_model)
+            global_model_copy = copy.deepcopy(self.global_model)
+            
+            # Train root model
+            for epoch in range(LOCAL_EPOCHS_ROOT):
+                epoch_loss = 0.0
+                batches = 0
+                
+                # Training loop
+                for batch_idx, (data, target) in enumerate(self.root_dataset):
+                    if torch.cuda.is_available():
+                        data, target = data.cuda(), target.cuda()
+                    
+                    # Forward pass
+                    output = root_model(data)
+                    loss = F.cross_entropy(output, target)
+                    
+                    # Backward pass
+                    loss.backward()
+                    
+                    # Update model
+                    for param in root_model.parameters():
+                        if param.grad is not None:
+                            param.data -= LR * param.grad
+                            param.grad.zero_()
+                    
+                    epoch_loss += loss.item()
+                    batches += 1
+                
+                avg_loss = epoch_loss / batches
+                
+                # After complete training in this epoch, compute gradient
+                grad_list = []
+                for (name, pg), (_, plg) in zip(global_model_copy.named_parameters(), root_model.named_parameters()):
+                    diff = (plg.data - pg.data).view(-1)
+                    grad_list.append(diff)
+                
+                # Create and normalize gradient vector
+                grad_vector = torch.cat(grad_list).detach()
+                norm_val = torch.norm(grad_vector) + 1e-8
+                normalized_grad = grad_vector / norm_val
+                
+                # Add gradient to current chunk
+                current_chunk_gradients.append(normalized_grad)
+                current_chunk_size += 1
+                
+                # Check if chunk is complete
+                if current_chunk_size >= GRADIENT_CHUNK_SIZE or epoch == LOCAL_EPOCHS_ROOT - 1:
+                    # Aggregate chunk gradients
+                    if GRADIENT_AGGREGATION_METHOD == 'mean':
+                        chunk_gradient = torch.stack(current_chunk_gradients).mean(dim=0)
+                    elif GRADIENT_AGGREGATION_METHOD == 'sum':
+                        chunk_gradient = torch.stack(current_chunk_gradients).sum(dim=0)
+                        chunk_gradient = chunk_gradient / (torch.norm(chunk_gradient) + 1e-8)
+                    elif GRADIENT_AGGREGATION_METHOD == 'last':
+                        chunk_gradient = current_chunk_gradients[-1]
+                    else:
+                        chunk_gradient = torch.stack(current_chunk_gradients).mean(dim=0)
+                    
+                    root_gradients.append(chunk_gradient)
+                    total_chunks_collected += 1
+                    
+                    print(f"Chunk {total_chunks_collected} collected with {current_chunk_size} gradients using '{GRADIENT_AGGREGATION_METHOD}' method.")
+                    
+                    # Reset chunk variables
+                    current_chunk_gradients = []
+                    current_chunk_size = 0
+            
+                if (epoch + 1) % 10 == 0:
+                    print(f"Root Training Epoch {epoch + 1}/{LOCAL_EPOCHS_ROOT}, Loss: {avg_loss:.4f}")
+                    if torch.cuda.is_available():
+                        print(f"GPU memory usage: {torch.cuda.memory_allocated() / 1024**2:.2f} MB allocated")
+            
+            # Clean up memory
+            del root_model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            
+            print(f"\nCollection completed. Collected {len(root_gradients)} gradient chunks from {LOCAL_EPOCHS_ROOT} epochs")
+            return root_gradients
+        except Exception as e:
+            print(f"Error in _collect_root_gradients: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            print(f"Returning {len(root_gradients)} gradients collected so far")
+            return root_gradients
