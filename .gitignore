@@ -1,12 +1,8 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -28,71 +24,103 @@ wheels/
 venv/
 env/
 .env/
+ENV/
 
-# PyCharm
+# IDE
 .idea/
-
-# VS Code
 .vscode/
+*.swp
+*.swo
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Data files
+# Data directories and files
+data/
 *.pkl
 *.h5
+*.npy
+*.npz
+*.mat
+*.csv
+*.tsv
+*.json
+*.jsonl
 
-# Specific datasets in data/ (ensure these are not checked in if they are large)
-data/MNIST/
-data/alzheimer/
-data/cifar/
+# Model files and weights
+model_weights/
+*.pt
+*.pth
+*.ckpt
+*.pb
+*.onnx
+*.tflite
+*.lite
+*.trt
 
-# Logs and checkpoints
-*.log
+# Logs and output
 logs/
-checkpoints/
+*.log
+output.txt
+*.out
+test_results/
 archived/
 
-# OS specific
-.DS_Store
-Thumbs.db
-
-# Output files and large media
+# Images and media
 *.png
 *.jpg
 *.jpeg
 *.gif
 *.bmp
 *.tiff
-output.txt
+*.ico
+*.svg
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.pdf
 
-# Model files
-*.pt
-*.pth
-model_weights/
-
-# Test results and reports
+# Specific directories
+federated_learning/logs/
+federated_learning/model_weights/
+federated_learning.egg-info/
+archived/
 test_results/
-*.csv
-*.tsv
-comprehensive_test_results_*.txt
+data/MNIST/
+data/alzheimer/
+data/cifar/
+
+# Reports and documentation
 COMPLETE_VALIDATION_REPORT.md
 FINAL_VALIDATION_REPORT.md
-comprehensive_validation_*.json # Assuming validation JSONs can be large outputs
-
-# Training artifacts
+comprehensive_validation_*.json
 training_metrics_*.pt
 training_progress_*.png
 
-# Compressed files
-*.zip
-*.gz
-*.tar
-*.rar
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
-# Backup files
-*.bak
+# Large binary files
+*.bin
+*.dat
+*.db
+*.sqlite
+*.sqlite3
 
 # Temporary files
 *.tmp
-*~ 
+*.temp
+*~
+
+# Cache directories
+.cache/
+.pytest_cache/
+__pycache__/ 
