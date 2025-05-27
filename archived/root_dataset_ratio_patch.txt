@@ -1,1 +1,0 @@
-"# Add ROOT_DATASET_RATIO = 0.1 to federated_learning/config/config.py before the ROOT_DATASET_SIZE line" 

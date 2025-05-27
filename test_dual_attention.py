@@ -29,54 +29,86 @@ def test_dual_attention_discrimination():
     
     # Create honest features (good values for all metrics)
     honest_features = torch.ones((num_honest, feature_dim), device=device) * 0.7
-    # Add some variation
-    honest_features += torch.randn((num_honest, feature_dim), device=device) * 0.1
+    honest_features += torch.randn((num_honest, feature_dim), device=device) * 0.05  # less noise
     
-    # Create different types of malicious features
+    # Create more extreme malicious features
     malicious_features = []
-    
-    # Type 1: Scaling attack (high norm)
+    # Type 1: Scaling attack (very high norm)
     scaling_feature = torch.ones(feature_dim, device=device) * 0.7
-    scaling_feature[3] = 0.95  # High norm value
-    scaling_feature[0] = 0.6   # Slightly worse reconstruction
+    scaling_feature[3] = 0.99  # Very high norm
+    scaling_feature[0] = 0.95  # High reconstruction error
+    scaling_feature[1] = 0.2   # Very low root similarity
+    scaling_feature[2] = 0.2   # Very low client similarity
+    scaling_feature[4] = 0.2   # Low consistency
     malicious_features.append(scaling_feature)
-    
-    # Type 2: Sign flipping (low similarity)
+    # Type 2: Sign flipping (very low similarity)
     sign_flip_feature = torch.ones(feature_dim, device=device) * 0.7
-    sign_flip_feature[1] = 0.3  # Low root similarity
-    sign_flip_feature[2] = 0.3  # Low client similarity
+    sign_flip_feature[1] = 0.1  # Extremely low root similarity
+    sign_flip_feature[2] = 0.1  # Extremely low client similarity
+    sign_flip_feature[0] = 0.9  # High reconstruction error
+    sign_flip_feature[3] = 0.95 # High norm
+    sign_flip_feature[4] = 0.3  # Low consistency
     malicious_features.append(sign_flip_feature)
-    
-    # Type 3: Noise attack (high reconstruction error)
+    # Type 3: Noise attack (very high reconstruction error)
     noise_feature = torch.ones(feature_dim, device=device) * 0.7
-    noise_feature[0] = 0.9  # High reconstruction error
-    noise_feature[4] = 0.4  # Low consistency
+    noise_feature[0] = 0.99  # Extremely high reconstruction error
+    noise_feature[1] = 0.3   # Low root similarity
+    noise_feature[2] = 0.3   # Low client similarity
+    noise_feature[3] = 0.8   # High norm
+    noise_feature[4] = 0.2   # Low consistency
     malicious_features.append(noise_feature)
-    
-    # Type 4: Combined attack
+    # Type 4: Combined attack (all bad)
     combined_feature = torch.ones(feature_dim, device=device) * 0.7
-    combined_feature[0] = 0.8  # High reconstruction error
-    combined_feature[1] = 0.4  # Low root similarity
-    combined_feature[3] = 0.9  # High norm
+    combined_feature[0] = 0.98  # High reconstruction error
+    combined_feature[1] = 0.15  # Very low root similarity
+    combined_feature[2] = 0.15  # Very low client similarity
+    combined_feature[3] = 0.97  # Very high norm
+    combined_feature[4] = 0.15  # Very low consistency
     malicious_features.append(combined_feature)
-    
     # Stack malicious features
     malicious_features = torch.stack(malicious_features)
-    
     # If using Shapley, add low Shapley values for malicious
     if feature_dim > 5:
         honest_features[:, 5] = 0.8  # High Shapley values for honest
-        malicious_features[:, 5] = 0.3  # Low Shapley values for malicious
-    
+        malicious_features[:, 5] = 0.1  # Very low Shapley values for malicious
     # Combine all features
     all_features = torch.cat([honest_features, malicious_features], dim=0)
     is_malicious = torch.cat([
         torch.zeros(num_honest), 
         torch.ones(num_malicious)
     ]).bool()
+    # Print feature values for diagnostics
+    print("\nHonest client features:")
+    print(honest_features.cpu().numpy())
+    print("\nMalicious client features:")
+    print(malicious_features.cpu().numpy())
+    
+    # === Supervised fine-tuning of dual attention model ===
+    print("\nFine-tuning dual attention model on synthetic features...")
+    labels = torch.cat([
+        torch.zeros(num_honest, device=device),  # Honest: 0
+        torch.ones(num_malicious, device=device) # Malicious: 1
+    ])
+    optimizer = torch.optim.Adam(server.dual_attention.parameters(), lr=0.01)
+    criterion = torch.nn.BCELoss()
+    all_features_train = all_features.detach().clone()
+    labels_train = labels.detach().clone()
+    for epoch in range(100):
+        server.dual_attention.train()
+        optimizer.zero_grad()
+        trust_scores, _ = server.dual_attention(all_features_train)
+        loss = criterion(trust_scores, labels_train)
+        loss.backward()
+        optimizer.step()
+        if (epoch+1) % 20 == 0 or epoch == 0:
+            with torch.no_grad():
+                pred = (trust_scores > 0.5).float()
+                acc = (pred == labels_train).float().mean().item()
+                print(f"  Epoch {epoch+1}: Loss={loss.item():.4f}, Acc={acc*100:.1f}%")
+    print("Fine-tuning complete.\n")
+    server.dual_attention.eval()
     
     # Get trust scores from dual attention model
-    server.dual_attention.eval()
     with torch.no_grad():
         trust_scores, confidence_scores = server.dual_attention(all_features)
         

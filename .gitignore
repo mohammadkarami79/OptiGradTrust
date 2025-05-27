@@ -41,12 +41,58 @@ env/
 # Data files
 *.pkl
 *.h5
+
+# Specific datasets in data/ (ensure these are not checked in if they are large)
 data/MNIST/
+data/alzheimer/
+data/cifar/
 
 # Logs and checkpoints
 *.log
+logs/
 checkpoints/
+archived/
 
 # OS specific
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Output files and large media
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+output.txt
+
+# Model files
+*.pt
+*.pth
+model_weights/
+
+# Test results and reports
+test_results/
+*.csv
+*.tsv
+comprehensive_test_results_*.txt
+COMPLETE_VALIDATION_REPORT.md
+FINAL_VALIDATION_REPORT.md
+comprehensive_validation_*.json # Assuming validation JSONs can be large outputs
+
+# Training artifacts
+training_metrics_*.pt
+training_progress_*.png
+
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.rar
+
+# Backup files
+*.bak
+
+# Temporary files
+*.tmp
+*~ 

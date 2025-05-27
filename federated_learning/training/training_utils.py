@@ -335,7 +335,7 @@ def train_dual_attention(honest_features, malicious_features=None, epochs=100,
     
     # Training setup with improved components
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=verbose)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, )
     
     # Custom weighted BCE loss for imbalanced classes
     def weighted_bce_loss(predictions, targets, weights):

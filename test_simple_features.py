@@ -1,279 +1,267 @@
 """
-Simple test script to verify gradient feature calculation and dual attention balancing.
-
-This script focuses only on:
-1. Verifying each feature is calculated correctly
-2. Testing that the dual attention model properly balances features for weighting
+Simple Feature Testing - Focus on individual feature validation
 """
 
 import torch
 import numpy as np
 import sys
 import os
-import matplotlib.pyplot as plt
 
 # Add the project root to the path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Import federated learning components
 from federated_learning.config.config import *
-from federated_learning.models.attention import DualAttention
-from federated_learning.utils.model_utils import set_random_seeds
+from federated_learning.training.server import Server
+from federated_learning.models.vae import GradientVAE
 
-def calculate_features(gradient, root_gradient):
-    """Manually calculate features for a gradient."""
-    device = gradient.device
-    features = torch.zeros(5, device=device)
+def test_gradient_norm_feature_detailed():
+    """Test gradient norm feature in detail."""
+    print("=== Testing Gradient Norm Feature in Detail ===")
     
-    # 1. VAE Reconstruction Error (we'll use a dummy value since we don't have a VAE)
-    features[0] = 0.1  # Dummy value
+    server = Server()
+    device = server.device
     
-    # 2. Root Similarity
-    root_sim = torch.nn.functional.cosine_similarity(gradient.flatten(), 
-                                                     root_gradient.flatten(), 
-                                                     dim=0)
-    # Normalize to [0, 1] range
-    root_sim = (root_sim + 1) / 2
-    features[1] = root_sim
+    # Create root gradients with known norms
+    root_gradients = []
+    for _ in range(5):
+        grad = torch.randn(1000).to(device) * 0.1  # Small normal gradients
+        root_gradients.append(grad)
     
-    # 3. Client Similarity (we'll use a dummy value since we don't have other clients)
-    features[2] = 0.6  # Dummy value
+    server.root_gradients = root_gradients
     
-    # 4. Gradient Norm
-    # Normalize to [0, 1] range with linear normalization
-    max_norm = 5.0
-    norm = torch.norm(gradient).item()
-    norm = min(norm / max_norm, 1.0)
-    features[3] = norm
-    
-    # 5. Sign Consistency
-    sign_match = torch.mean((torch.sign(gradient) == torch.sign(root_gradient)).float())
-    features[4] = sign_match
-    
-    return features
-
-def test_feature_extraction_and_balancing():
-    """Test that features are calculated correctly and balanced properly in dual attention."""
-    print("\n=== Testing Feature Extraction and Dual Attention Balancing ===")
-    
-    # Set random seeds
-    set_random_seeds(42)
-    print("Random seeds set")
-    
-    # Set device
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    print(f"Using device: {device}")
-    
-    # Create simple root and test gradients (use smaller dimension for speed)
-    print("Creating test gradients...")
-    dim = 100  # Smaller dimension for faster testing
-    
-    root_gradient = torch.randn(dim).to(device)
-    print(f"Root gradient shape: {root_gradient.shape}")
-    
-    # Create test gradients
-    gradients = []
-    gradient_names = []
-    
-    # Honest gradient (similar to root)
-    honest_gradient = root_gradient.clone() + torch.randn(dim).to(device) * 0.1
-    gradients.append(honest_gradient)
-    gradient_names.append("Honest")
-    
-    # Scaling attack (5x magnitude)
-    scaling_attack = root_gradient.clone() * 5.0
-    gradients.append(scaling_attack)
-    gradient_names.append("Scaling Attack")
-    
-    # Sign flipping attack (negated)
-    sign_flipping = -root_gradient.clone()
-    gradients.append(sign_flipping)
-    gradient_names.append("Sign Flipping Attack")
-    
-    print(f"Created {len(gradients)} test gradients")
-    
-    # Extract features for each gradient
-    features = []
-    feature_names = [
-        "VAE Reconstruction Error",
-        "Root Similarity",
-        "Client Similarity",
-        "Gradient Norm", 
-        "Sign Consistency"
+    # Test different gradient magnitudes
+    test_cases = [
+        ("Small honest", torch.randn(1000).to(device) * 0.05),
+        ("Normal honest", torch.randn(1000).to(device) * 0.1),
+        ("Large honest", torch.randn(1000).to(device) * 0.2),
+        ("Scaling attack", torch.randn(1000).to(device) * 2.0),  # 20x larger
+        ("Large scaling", torch.randn(1000).to(device) * 10.0), # 100x larger
     ]
     
-    print("\nFeature Extraction Results:")
-    for i, grad in enumerate(gradients):
-        feature_vector = calculate_features(grad, root_gradient)
-        features.append(feature_vector)
+    print("\nGradient Norm Feature Test:")
+    print("Name              | Gradient Norm | Norm Feature | Expected")
+    print("-" * 65)
+    
+    for name, grad in test_cases:
+        features = server._compute_gradient_features(grad, root_gradients[0])
+        grad_norm = torch.norm(grad).item()
+        norm_feature = features[3].item()
         
-        print(f"\n{gradient_names[i]} gradient:")
-        print(f"  Raw gradient norm: {torch.norm(grad).item():.4f}")
+        # Determine expected behavior
+        if "attack" in name.lower() or "scaling" in name.lower():
+            expected = "HIGH (>0.8)"
+        else:
+            expected = "LOW-MED (<0.5)"
         
-        for j, name in enumerate(feature_names):
-            print(f"  {j+1}. {name}: {feature_vector[j].item():.4f}")
+        print(f"{name:<16} | {grad_norm:>11.4f} | {norm_feature:>10.4f} | {expected}")
     
-    # Verify feature calculation
-    print("\nVerifying feature calculation...")
+    # Verify ordering
+    features_small = server._compute_gradient_features(test_cases[0][1], root_gradients[0])
+    features_attack = server._compute_gradient_features(test_cases[3][1], root_gradients[0])
+    features_large_attack = server._compute_gradient_features(test_cases[4][1], root_gradients[0])
     
-    # Stack features
-    features_tensor = torch.stack(features)
-    print(f"Features tensor shape: {features_tensor.shape}")
+    assert features_attack[3] > features_small[3], "Attack should have higher norm feature than small gradient"
+    assert features_large_attack[3] > features_attack[3], "Larger attack should have higher norm feature"
     
-    # Verify honest gradient has high root similarity
-    assert features[0][1] > 0.5, "Honest gradient should have high root similarity"
+    print("\n✅ Gradient norm feature ordering test passed")
+
+def test_vae_reconstruction_detailed():
+    """Test VAE reconstruction feature in detail."""
+    print("\n=== Testing VAE Reconstruction Feature in Detail ===")
     
-    # Verify scaling attack has high norm
-    # Both are showing 1.0 since we're capping at max_norm
-    print(f"Honest gradient raw norm: {torch.norm(honest_gradient).item():.4f}")
-    print(f"Scaling attack raw norm: {torch.norm(scaling_attack).item():.4f}")
+    server = Server()
+    device = server.device
     
-    # Skip the assertion since both are normalized to 1.0
-    # assert features[1][3] > features[0][3], "Scaling attack should have higher norm"
+    # Create and train VAE on specific gradients
+    root_grad = torch.randn(1000).to(device) * 0.1
+    server.root_gradients = [root_grad]
     
-    # Alternative check on raw norms
-    assert torch.norm(scaling_attack).item() > torch.norm(honest_gradient).item(), "Scaling attack should have higher raw norm"
+    vae = GradientVAE(input_dim=1000, hidden_dim=64, latent_dim=32).to(device)
+    optimizer = torch.optim.Adam(vae.parameters(), lr=1e-3)
     
-    # Verify sign flipping attack has lower sign consistency
-    assert features[2][4] < 0.5, "Sign flipping attack should have low sign consistency"
-    
-    print("✅ Feature calculation verified")
-    
-    # Create dual attention model
-    print("\nCreating dual attention model...")
-    feature_dim = features_tensor.shape[1]
-    dual_attention = DualAttention(
-        feature_dim=feature_dim,
-        hidden_dim=16,
-        num_heads=2,
-        num_layers=2
-    )
-    dual_attention.to(device)
-    print(f"Dual attention model created with input dimension: {feature_dim}")
-    
-    # Create training data
-    honest_features = features_tensor[0:1]  # First gradient is honest
-    malicious_features = features_tensor[1:] # Rest are attacks
-    
-    # Train the model
-    print("\nTraining dual attention model...")
-    batch_size = 1  # Use smaller batch size
-    epochs = 3      # Fewer epochs
-    
-    optimizer = torch.optim.Adam(dual_attention.parameters(), lr=0.001)
-    criterion = torch.nn.BCELoss()
-    
-    # Train from scratch
-    for epoch in range(epochs):
-        print(f"Epoch {epoch+1}/{epochs} starting...")
-        # Create mini-batches of honest and malicious pairs
+    # Train VAE on honest-like gradients
+    print("Training VAE on honest gradients...")
+    for epoch in range(10):
         total_loss = 0
-        num_batches = 0
-        
-        # 1. Honest samples - target is high trust
-        if len(honest_features) > 0:
-            honest_targets = torch.ones(len(honest_features), device=device)
-            
-            # Train on honest samples
+        for _ in range(20):  # More training samples
+            honest_grad = torch.randn(1000).to(device) * 0.1
             optimizer.zero_grad()
-            print("Processing honest samples...")
-            honest_trust_scores, _ = dual_attention(honest_features)
-            honest_loss = criterion(honest_trust_scores, honest_targets)
-            honest_loss.backward()
+            recon, mu, logvar = vae(honest_grad.unsqueeze(0))
+            loss = vae.loss_function(recon, honest_grad.unsqueeze(0), mu, logvar)
+            loss.backward()
             optimizer.step()
-            
-            total_loss += honest_loss.item()
-            num_batches += 1
-            print(f"Honest samples processed, loss: {honest_loss.item():.4f}")
+            total_loss += loss.item()
         
-        # 2. Malicious samples - target is low trust
-        if len(malicious_features) > 0:
-            malicious_targets = torch.zeros(len(malicious_features), device=device)
-            
-            # Train on malicious samples
-            optimizer.zero_grad()
-            print("Processing malicious samples...")
-            malicious_trust_scores, _ = dual_attention(malicious_features)
-            malicious_loss = criterion(malicious_trust_scores, malicious_targets)
-            malicious_loss.backward()
-            optimizer.step()
-            
-            total_loss += malicious_loss.item()
-            num_batches += 1
-            print(f"Malicious samples processed, loss: {malicious_loss.item():.4f}")
-            
-        # Print epoch results
-        if num_batches > 0:
-            avg_loss = total_loss / num_batches
-            print(f"Epoch {epoch+1}/{epochs} completed, Loss: {avg_loss:.4f}")
+        if epoch % 3 == 0:
+            print(f"Epoch {epoch}: Average loss = {total_loss/20:.4f}")
     
-    print("Training completed")
+    server.vae = vae
     
-    # Create test features with mixed properties
-    print("\nTesting feature balancing...")
-    test_features = []
-    test_names = []
+    # Test reconstruction on different gradient types
+    test_cases = [
+        ("Similar to training", torch.randn(1000).to(device) * 0.1),
+        ("Slightly different", torch.randn(1000).to(device) * 0.15),
+        ("Much larger", torch.randn(1000).to(device) * 1.0),
+        ("Very different", torch.randn(1000).to(device) * 5.0),
+        ("Opposite pattern", -root_grad),
+    ]
     
-    # Base honest features
-    test_features.append(features_tensor[0].clone())
-    test_names.append("Honest")
+    print("\nVAE Reconstruction Test:")
+    print("Name              | Recon Error | Expected")
+    print("-" * 45)
     
-    # High reconstruction error but high similarity
-    high_recon_high_sim = features_tensor[0].clone()
-    high_recon_high_sim[0] = 0.5  # Worse reconstruction error
-    high_recon_high_sim[1] = 0.9  # Better similarity
-    test_features.append(high_recon_high_sim)
-    test_names.append("High Recon, High Sim")
-    
-    # Low reconstruction error but low similarity
-    low_recon_low_sim = features_tensor[0].clone()
-    low_recon_low_sim[0] = 0.1  # Better reconstruction error
-    low_recon_low_sim[1] = 0.4  # Worse similarity
-    test_features.append(low_recon_low_sim)
-    test_names.append("Low Recon, Low Sim")
-    
-    # Stack test features
-    test_features_tensor = torch.stack(test_features)
-    print(f"Test features tensor shape: {test_features_tensor.shape}")
-    
-    # Get trust scores and weights
-    print("Computing trust scores and weights...")
-    dual_attention.eval()
-    with torch.no_grad():
-        trust_scores, _ = dual_attention(test_features_tensor)
-        print(f"Trust scores computed: {trust_scores}")
+    for name, grad in test_cases:
+        features = server._compute_gradient_features(grad, root_grad)
+        recon_error = features[0].item()
         
-        weights, malicious_indices = dual_attention.get_gradient_weights(
-            test_features_tensor,
-            trust_scores=trust_scores
-        )
-        print(f"Weights computed: {weights}")
-        print(f"Malicious indices: {malicious_indices}")
-    
-    # Print results
-    print("\nDual Attention Results:")
-    print("Feature\t\t\tTrust Score\tWeight")
-    print("-" * 60)
-    
-    for i, name in enumerate(test_names):
-        print(f"{name:<20}\t{trust_scores[i].item():.4f}\t{weights[i].item():.4f}")
-    
-    # Verify feature balancing
-    print("\nVerifying feature balancing")
-    
-    # Test that high root similarity compensates for high reconstruction error
-    high_recon_trust = trust_scores[1].item()
-    low_sim_trust = trust_scores[2].item()
-    print(f"High recon but high similarity trust: {high_recon_trust:.4f}")
-    print(f"Low recon but low similarity trust: {low_sim_trust:.4f}")
-    
-    # Should have a meaningful range of weights when using continuous weighting
-    if MALICIOUS_WEIGHTING_METHOD == 'continuous':
-        weight_range = weights.max().item() - weights.min().item()
-        print(f"Weight range: {weight_range:.4f}")
+        if "similar" in name.lower():
+            expected = "LOW (<0.3)"
+        elif "different" in name.lower() or "opposite" in name.lower():
+            expected = "HIGH (>0.7)"
+        else:
+            expected = "MEDIUM"
         
-    print("\n✅ Feature balancing verification completed")
-    print("\n=== Test completed successfully ===")
+        print(f"{name:<16} | {recon_error:>9.4f} | {expected}")
+    
+    # Verify ordering
+    similar_features = server._compute_gradient_features(test_cases[0][1], root_grad)
+    different_features = server._compute_gradient_features(test_cases[3][1], root_grad)
+    
+    assert different_features[0] > similar_features[0], "Different gradient should have higher reconstruction error"
+    
+    print("\n✅ VAE reconstruction test passed")
+
+def test_similarity_features():
+    """Test similarity features (root and client)."""
+    print("\n=== Testing Similarity Features ===")
+    
+    server = Server()
+    device = server.device
+    
+    # Create known root gradient
+    root_grad = torch.randn(1000).to(device)
+    root_grad = root_grad / torch.norm(root_grad)  # Normalize for predictable similarity
+    server.root_gradients = [root_grad]
+    
+    test_cases = [
+        ("Identical", root_grad.clone()),
+        ("Scaled identical", root_grad * 2.0),
+        ("Opposite", -root_grad),
+        ("Orthogonal", torch.randn(1000).to(device)),
+        ("Random", torch.randn(1000).to(device) * 0.5),
+    ]
+    
+    # Make orthogonal gradient truly orthogonal
+    orthogonal_grad = test_cases[3][1]
+    orthogonal_grad = orthogonal_grad - torch.dot(orthogonal_grad, root_grad) * root_grad
+    orthogonal_grad = orthogonal_grad / torch.norm(orthogonal_grad)
+    test_cases[3] = ("Orthogonal", orthogonal_grad)
+    
+    print("\nSimilarity Features Test:")
+    print("Name              | Root Sim | Expected  | Actual Cosine")
+    print("-" * 55)
+    
+    for name, grad in test_cases:
+        features = server._compute_gradient_features(grad, root_grad)
+        root_similarity = features[1].item()
+        
+        # Calculate actual cosine similarity for verification
+        actual_cosine = torch.cosine_similarity(grad.unsqueeze(0), root_grad.unsqueeze(0)).item()
+        normalized_cosine = (actual_cosine + 1) / 2  # Convert from [-1,1] to [0,1]
+        
+        if name == "Identical":
+            expected = "~1.0"
+        elif name == "Scaled identical":
+            expected = "~1.0"
+        elif name == "Opposite":
+            expected = "~0.0"
+        elif name == "Orthogonal":
+            expected = "~0.5"
+        else:
+            expected = "varies"
+        
+        print(f"{name:<16} | {root_similarity:>6.3f}   | {expected:<8} | {normalized_cosine:>6.3f}")
+    
+    # Verify key relationships
+    identical_sim = server._compute_gradient_features(test_cases[0][1], root_grad)[1]
+    opposite_sim = server._compute_gradient_features(test_cases[2][1], root_grad)[1]
+    orthogonal_sim = server._compute_gradient_features(test_cases[3][1], root_grad)[1]
+    
+    assert identical_sim > 0.95, f"Identical should have similarity ~1.0, got {identical_sim:.3f}"
+    assert opposite_sim < 0.05, f"Opposite should have similarity ~0.0, got {opposite_sim:.3f}"
+    assert 0.4 < orthogonal_sim < 0.6, f"Orthogonal should have similarity ~0.5, got {orthogonal_sim:.3f}"
+    
+    print("\n✅ Similarity features test passed")
+
+def test_sign_consistency():
+    """Test sign consistency feature."""
+    print("\n=== Testing Sign Consistency Feature ===")
+    
+    server = Server()
+    device = server.device
+    
+    root_grad = torch.randn(1000).to(device)
+    server.root_gradients = [root_grad]
+    
+    test_cases = [
+        ("Same signs", torch.abs(root_grad) * torch.sign(root_grad)),
+        ("Opposite signs", -torch.abs(root_grad) * torch.sign(root_grad)),
+        ("50% flipped", torch.where(torch.randperm(1000).to(device) < 500, root_grad, -root_grad)),
+        ("Random signs", torch.randn(1000).to(device)),
+    ]
+    
+    print("\nSign Consistency Test:")
+    print("Name              | Sign Consistency | Expected")
+    print("-" * 50)
+    
+    for name, grad in test_cases:
+        features = server._compute_gradient_features(grad, root_grad)
+        sign_consistency = features[4].item()
+        
+        if "same" in name.lower():
+            expected = "~1.0"
+        elif "opposite" in name.lower():
+            expected = "~0.0"
+        elif "50%" in name.lower():
+            expected = "~0.5"
+        else:
+            expected = "varies"
+        
+        print(f"{name:<16} | {sign_consistency:>14.3f} | {expected}")
+    
+    # Verify relationships
+    same_consistency = server._compute_gradient_features(test_cases[0][1], root_grad)[4]
+    opposite_consistency = server._compute_gradient_features(test_cases[1][1], root_grad)[4]
+    
+    assert same_consistency > 0.95, f"Same signs should have consistency ~1.0, got {same_consistency:.3f}"
+    assert opposite_consistency < 0.05, f"Opposite signs should have consistency ~0.0, got {opposite_consistency:.3f}"
+    
+    print("\n✅ Sign consistency test passed")
+
+def main():
+    """Run all focused feature tests."""
+    print("=== Focused Feature Validation Tests ===")
+    
+    try:
+        test_gradient_norm_feature_detailed()
+        test_vae_reconstruction_detailed()
+        test_similarity_features()
+        test_sign_consistency()
+        
+        print("\n🎉 ALL FOCUSED TESTS PASSED! 🎉")
+        print("✅ Gradient norm feature correctly distinguishes attack gradients")
+        print("✅ VAE reconstruction distinguishes between similar and different gradients")
+        print("✅ Similarity features work as expected")
+        print("✅ Sign consistency feature works correctly")
+        print("✅ All individual features are working properly!")
+        
+        return True
+        
+    except Exception as e:
+        print(f"\n❌ TEST FAILED: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 if __name__ == "__main__":
-    test_feature_extraction_and_balancing() 
+    main() 

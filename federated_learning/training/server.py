@@ -6,11 +6,13 @@ from federated_learning.models.cnn import CNNMnist
 from federated_learning.models.resnet import ResNet50Alzheimer, ResNet18Alzheimer
 from federated_learning.models.vae import VAE, GradientVAE
 from federated_learning.models.attention import DualAttention
+from federated_learning.models.rl_actor_critic import ActorCritic
 from torch.utils.data import DataLoader, Subset
 import copy
 import torch.optim as optim
 from datetime import datetime
 import matplotlib.pyplot as plt
+import time
 
 def calculate_model_param_change(old_model, new_model):
     """Calculate the total parameter change between two models."""
@@ -47,25 +49,55 @@ class Server:
         # Initialize the global model
         self.global_model = self._create_model().to(self.device)
         
+        # Determine gradient dimension dynamically
+        self.gradient_dimension = sum(p.numel() for p in self.global_model.parameters() if p.requires_grad)
+        
         # Initialize VAE and Dual Attention
         self.vae = self._create_vae()
         self.dual_attention = self._create_dual_attention()
+        
+        # Initialize RL actor-critic model
+        self.actor_critic = self._create_actor_critic()
+        
+        # RL environment state variables
+        self.prev_validation_loss = float('inf')
+        self.prev_validation_acc = 0.0
         
         print("Initialized server")
         
     def _create_model(self):
         if MODEL == 'CNN':
-            return CNNMnist()
+            # Determine input channels and number of classes based on dataset
+            if DATASET == 'MNIST':
+                in_channels = 1
+                num_classes = 10
+            elif DATASET == 'CIFAR10':
+                in_channels = 3
+                num_classes = 10
+            elif DATASET == 'ALZHEIMER':
+                in_channels = 3
+                num_classes = ALZHEIMER_CLASSES
+            else:
+                # Default fallback
+                in_channels = 1
+                num_classes = 10
+                
+            return CNNMnist(in_channels=in_channels, num_classes=num_classes)
+            
         elif MODEL == 'RESNET50':
-            return ResNet50Alzheimer(num_classes=10 if DATASET == 'MNIST' else ALZHEIMER_CLASSES)
+            num_classes = 10 if DATASET == 'MNIST' or DATASET == 'CIFAR10' else ALZHEIMER_CLASSES
+            return ResNet50Alzheimer(num_classes=num_classes)
+            
         elif MODEL == 'RESNET18':
-            return ResNet18Alzheimer(num_classes=10 if DATASET == 'MNIST' else ALZHEIMER_CLASSES)
+            num_classes = 10 if DATASET == 'MNIST' or DATASET == 'CIFAR10' else ALZHEIMER_CLASSES
+            return ResNet18Alzheimer(num_classes=num_classes)
+            
         else:
             raise ValueError(f"Unknown model type: {MODEL}")
 
     def _create_vae(self):
         return GradientVAE(
-            input_dim=GRADIENT_DIMENSION,
+            input_dim=self.gradient_dimension,
             hidden_dim=VAE_HIDDEN_DIM,
             latent_dim=VAE_LATENT_DIM
         ).to(self.device)
@@ -77,6 +109,11 @@ class Server:
             hidden_dim=DUAL_ATTENTION_HIDDEN_SIZE,
             num_heads=DUAL_ATTENTION_HEADS
         ).to(self.device)
+        
+    def _create_actor_critic(self):
+        """Create the actor-critic model for RL-based aggregation."""
+        feature_dim = 6 if ENABLE_SHAPLEY else 5
+        return ActorCritic(input_dim=feature_dim).to(self.device)
         
     def _pretrain_global_model(self):
         """Pre-train the global model on the root dataset"""
@@ -334,15 +371,24 @@ class Server:
         else:
             features[2] = 0.5  # Default placeholder
         
-        # 4. Gradient norm (improved normalization)
-        # Using a linear normalization with a predefined max norm
+        # 4. Gradient norm (dynamic log normalization)
         grad_norm = torch.norm(gradient).item()
         raw_norm = grad_norm
-
-        # Linear normalization relative to MAX_GRADIENT_NORM
-        max_norm = MAX_GRADIENT_NORM if 'MAX_GRADIENT_NORM' in globals() else 10.0
-        norm_feature = min(grad_norm / max_norm, 1.0)
-        features[3] = norm_feature
+        
+        # Use dynamic reference based on root gradients if available
+        if hasattr(self, 'root_gradients') and self.root_gradients and len(self.root_gradients) > 0:
+            # Calculate median norm of root gradients as baseline
+            root_norms = [torch.norm(g).item() for g in self.root_gradients]
+            median_norm = np.median(root_norms)
+            # Use 3x median as the reference point for attacks
+            norm_reference = max(median_norm * 3.0, 50.0)  # Ensure minimum baseline
+        else:
+            # Fallback to a much higher static value
+            norm_reference = 500.0  # Much higher than before
+            
+        # Use log normalization to distinguish large norms while preserving differences
+        norm_feature = np.log1p(grad_norm) / np.log1p(norm_reference)
+        features[3] = min(norm_feature, 1.0)
         
         # 5. Consistency (gradient pattern consistency)
         if root_gradient is not None:
@@ -691,7 +737,24 @@ class Server:
                 # For each gradient, compute feature vector
                 feature_vectors = self._compute_all_gradient_features(all_gradients)
                 all_features = feature_vectors
+            
+            # Sort features by client_id to ensure consistent ordering
+            if all_features and client_indices:
+                # Create a sorted list of (client_id, index) pairs
+                sorted_client_indices = sorted(enumerate(client_indices), key=lambda x: x[1])
+                # Reorder all_gradients and all_features based on sorted client indices
+                sorted_indices = [idx for idx, _ in sorted_client_indices]
+                client_indices = [client_indices[idx] for idx in sorted_indices]
+                all_gradients = [all_gradients[idx] for idx in sorted_indices]
                 
+                # Handle different feature formats (tensor vs list)
+                if isinstance(all_features, torch.Tensor):
+                    all_features = all_features[sorted_indices]
+                else:
+                    all_features = [all_features[idx] for idx in sorted_indices]
+                
+                print(f"Sorted features by client_id in ascending order: {client_indices}")
+            
             # Compute Shapley values if enabled
             if ENABLE_SHAPLEY:
                 shapley_values = self._compute_shapley_values(all_gradients, client_indices)
@@ -800,6 +863,9 @@ class Server:
                     # Convert to list for easier handling
                     weights = weights_tensor.cpu().numpy().tolist()
                     
+                    # Store dual attention weights for comparison in RL
+                    self.dual_attention_weights = weights_tensor
+                    
                     # Convert detected malicious_indices to client indices
                     detected_malicious_clients = []
                     for i in malicious_indices:
@@ -824,12 +890,12 @@ class Server:
                             print(f"False positives: {false_positives}")
                         if false_negatives:
                             print(f"False negatives (undetected malicious): {false_negatives}")
-                    
+
                 except Exception as e:
                     print(f"Error computing weights with dual attention: {str(e)}")
                     import traceback
                     traceback.print_exc()
-                    
+
                     # Fallback to direct trust score weighting
                     weights = [max(0.01, score) for score in client_trust_scores]
                     total_weight = sum(weights)
@@ -858,6 +924,9 @@ class Server:
                 round_metrics[round_idx]['weights'][client_idx] = weight
                 print(f"Client {client_idx} (Malicious: {is_malicious}): Weight = {weight:.4f}")
             
+            # Store current round gradients for RL comparison
+            self.current_round_gradients = all_gradients.copy()
+            
             # Prepare aggregation arguments
             aggregation_args = {
                 'model': self.global_model,
@@ -872,29 +941,94 @@ class Server:
             # Aggregate gradients based on selected method
             print(f"\n--- Aggregating gradients using {AGGREGATION_METHOD} ---")
             
-            if AGGREGATION_METHOD == 'fedavg':
+            # Determine which aggregation method to use based on RL_AGGREGATION_METHOD config
+            current_aggregation_method = AGGREGATION_METHOD  # Default to the global setting
+            
+            # Check if RL_AGGREGATION_METHOD is defined and handle different options
+            if 'RL_AGGREGATION_METHOD' in globals():
+                if RL_AGGREGATION_METHOD == 'rl_actor_critic':
+                    # Always use RL-based aggregation
+                    current_aggregation_method = 'rl'
+                elif RL_AGGREGATION_METHOD == 'hybrid':
+                    # Start with dual attention, then gradually transition to RL
+                    warmup_rounds = RL_WARMUP_ROUNDS if 'RL_WARMUP_ROUNDS' in globals() else 5
+                    ramp_up_rounds = RL_RAMP_UP_ROUNDS if 'RL_RAMP_UP_ROUNDS' in globals() else 10
+                    
+                    if round_idx < warmup_rounds:
+                        # Use dual attention during warmup
+                        current_aggregation_method = AGGREGATION_METHOD
+                    elif round_idx < warmup_rounds + ramp_up_rounds:
+                        # Blend dual attention and RL during ramp-up
+                        # Just use RL, but we'll blend the weights later
+                        current_aggregation_method = 'rl'
+                    else:
+                        # Use pure RL after ramp-up
+                        current_aggregation_method = 'rl'
+            
+            print(f"Using aggregation method: {current_aggregation_method}")
+            
+            if current_aggregation_method == 'fedavg':
                 # Simple weighted averaging
                 aggregated_gradient = self._aggregate_fedavg(all_gradients, self.weights)
                 
-            elif AGGREGATION_METHOD == 'fedavg_with_trust':
+            elif current_aggregation_method == 'fedavg_with_trust':
                 # FedAvg with trust scores as weights
                 aggregated_gradient = self._aggregate_fedavg(all_gradients, self.weights)
                 
-            elif AGGREGATION_METHOD == 'fedprox':
+            elif current_aggregation_method == 'fedprox':
                 # FedProx aggregation (same as FedAvg for aggregation, proximal term is applied during client training)
-                aggregated_gradient = self._aggregate_fedavg(all_gradients, self.weights)
+                aggregated_gradient = self._aggregate_fedprox(all_gradients, self.weights)
                 
-            elif AGGREGATION_METHOD == 'fedbn':
+            elif current_aggregation_method == 'fedbn':
                 # FedBN - Skip BatchNorm parameters during aggregation
                 aggregated_gradient = self._aggregate_fedbn(all_gradients, self.weights)
                 
-            elif AGGREGATION_METHOD == 'fedadmm':
+            elif current_aggregation_method == 'fedadmm':
                 # FedADMM aggregation
                 aggregated_gradient = self._aggregate_fedadmm(all_gradients, self.weights)
                 
+            elif current_aggregation_method == 'rl':
+                # RL-based aggregation
+                aggregated_gradient = self._aggregate_rl(all_gradients, all_features, client_indices)
+                
+                # If we're in the hybrid ramp-up phase, blend with dual attention weights
+                if 'RL_AGGREGATION_METHOD' in globals() and RL_AGGREGATION_METHOD == 'hybrid':
+                    warmup_rounds = RL_WARMUP_ROUNDS if 'RL_WARMUP_ROUNDS' in globals() else 5
+                    ramp_up_rounds = RL_RAMP_UP_ROUNDS if 'RL_RAMP_UP_ROUNDS' in globals() else 10
+                    
+                    if round_idx >= warmup_rounds and round_idx < warmup_rounds + ramp_up_rounds:
+                        # Calculate blend ratio (0 -> 1 over the ramp-up period)
+                        blend_ratio = (round_idx - warmup_rounds) / ramp_up_rounds
+                        print(f"Hybrid mode: Blending RL with dual attention (RL weight: {blend_ratio:.2f})")
+                        
+                        # Get dual attention gradient (must use the original dual attention weights,
+                        # not the RL weights stored in self.weights).
+                        # If for some reason dual_attention_weights is unavailable (e.g., fallback path),
+                        # revert to the current weights to avoid crashing.
+
+                        if hasattr(self, 'dual_attention_weights') and self.dual_attention_weights is not None:
+                            dual_w = self.dual_attention_weights
+                        else:
+                            # Graceful fallback – this should rarely happen but guarantees robustness.
+                            dual_w = self.weights
+
+                        # Aggregate using the same base method that would have been used for dual attention.
+                        if AGGREGATION_METHOD == 'fedbn':
+                            dual_attention_gradient = self._aggregate_fedbn(all_gradients, dual_w)
+                        elif AGGREGATION_METHOD == 'fedprox':
+                            # FedProx aggregation re-uses FedAvg for the actual averaging step
+                            dual_attention_gradient = self._aggregate_fedavg(all_gradients, dual_w)
+                        else:
+                            # Default / FedAvg
+                            dual_attention_gradient = self._aggregate_fedavg(all_gradients, dual_w)
+
+                        # Blend the gradients
+                        blended_gradient = (blend_ratio * aggregated_gradient + 
+                                             (1 - blend_ratio) * dual_attention_gradient)
+                        aggregated_gradient = blended_gradient
             else:
                 # Default to weighted average
-                print(f"Unknown aggregation method: {AGGREGATION_METHOD}. Using weighted average.")
+                print(f"Unknown aggregation method: {current_aggregation_method}. Using weighted average.")
                 aggregated_gradient = self._aggregate_fedavg(all_gradients, self.weights)
             
             # Update global model with aggregated gradient
@@ -909,6 +1043,32 @@ class Server:
             # Print parameter change statistics
             param_change = calculate_model_param_change(old_model_copy, self.global_model)
             print(f"Global model parameter change: {param_change:.8f}")
+            
+            # Evaluate model after update to get feedback for RL
+            if 'RL_AGGREGATION_METHOD' in globals() and RL_AGGREGATION_METHOD != 'dual_attention':
+                print("\n--- Evaluating model for RL feedback ---")
+                from federated_learning.training.training_utils import test
+                post_update_acc, post_update_error = test(self.global_model, self.test_loader)
+                print(f"Post-update accuracy: {post_update_acc:.4f}, error: {post_update_error:.4f}")
+                
+                # Update RL model with reward based on model improvement
+                self._update_rl_model(
+                    round_idx=round_idx,
+                    current_loss=post_update_error,
+                    current_acc=post_update_acc,
+                    features=features_tensor if 'features_tensor' in locals() else None,
+                    client_indices=client_indices
+                )
+                
+                # Periodically save the RL model
+                if round_idx % 5 == 0:
+                    save_dir = os.path.join('model_weights', 'rl_actor_critic')
+                    os.makedirs(save_dir, exist_ok=True)
+                    torch.save(
+                        self.actor_critic.state_dict(), 
+                        os.path.join(save_dir, f'actor_critic_round_{round_idx+1}.pth')
+                    )
+                    print(f"Saved RL model at round {round_idx+1}")
             
             # Optional: Clear cache to reduce memory usage
             if torch.cuda.is_available():
@@ -1001,6 +1161,53 @@ class Server:
         
         return z
 
+    def _aggregate_rl(self, gradients, features, client_indices):
+        """
+        Aggregate gradients using the RL actor-critic model.
+        
+        Args:
+            gradients: List of client gradients
+            features: Tensor of client feature vectors
+            client_indices: List of corresponding client indices
+            
+        Returns:
+            aggregated_gradient: Aggregated gradient
+        """
+        print("\n--- Performing RL-based weight calculation ---")
+        
+        # Ensure features tensor is on the correct device
+        if features.device != self.device:
+            features = features.to(self.device)
+        
+        # Get aggregation weights from the actor-critic model
+        with torch.no_grad():
+            weights = self.actor_critic.get_weights(features)
+        
+        # Store weights for logging and future reference
+        self.weights = weights
+            
+        # Print weights for each client
+        print("\nRL Aggregation Weights:")
+        for i, client_idx in enumerate(client_indices):
+            client = self.clients[client_idx]
+            is_malicious = "YES" if client.is_malicious else "NO"
+            weight = weights[i].item()
+            print(f"Client {client_idx} (Malicious: {is_malicious}): Weight = {weight:.4f}")
+        
+        # Use the appropriate base aggregation method with RL-calculated weights
+        print(f"Using base aggregation technique: {AGGREGATION_METHOD}")
+        
+        if AGGREGATION_METHOD == 'fedbn':
+            return self._aggregate_fedbn(gradients, weights)
+        elif AGGREGATION_METHOD == 'fedprox':
+            # FedProx uses the same aggregation as FedAvg
+            return self._aggregate_fedavg(gradients, weights)
+        elif AGGREGATION_METHOD == 'fedadmm':
+            return self._aggregate_fedadmm(gradients, weights)
+        else:
+            # Default to FedAvg for other methods
+            return self._aggregate_fedavg(gradients, weights)
+
     def _update_global_model(self, aggregated_gradient):
         """Update global model with aggregated gradient."""
         from federated_learning.utils.model_utils import update_model_with_gradient
@@ -1028,16 +1235,174 @@ class Server:
         from federated_learning.config.config import CLIENT_SELECTION_RATIO
         
         if num_clients is None:
-            num_clients = max(1, int(CLIENT_SELECTION_RATIO * len(self.clients)))
+            num_clients = max(1, int(len(self.clients) * CLIENT_SELECTION_RATIO))
+        else:
+            num_clients = min(num_clients, len(self.clients))
             
-        # Random selection of clients
-        import random
-        selected_indices = random.sample(range(len(self.clients)), num_clients)
+        # Randomly select clients
+        selected_indices = np.random.choice(len(self.clients), num_clients, replace=False)
+        return selected_indices.tolist()
         
-        return selected_indices
+    def _update_rl_model(self, round_idx, current_loss, current_acc, features, client_indices):
+        """
+        Update the RL model based on the reward signal from model performance.
         
+        Args:
+            round_idx: Current training round
+            current_loss: Current validation loss
+            current_acc: Current validation accuracy
+            features: Client feature vectors
+            client_indices: List of client indices
+            
+        Returns:
+            reward: Reward value computed
+        """
+        print("\n--- Updating RL model ---")
+        
+        # Get dual attention baseline performance for this round if needed
+        # We'll compare against the actual dual attention performance for this round
+        dual_attention_loss = None
+        dual_attention_acc = None
+        
+        # Only update if using RL-based aggregation
+        if 'RL_AGGREGATION_METHOD' in globals() and RL_AGGREGATION_METHOD != 'dual_attention':
+            # Check if we're past the warmup phase
+            warmup_rounds = RL_WARMUP_ROUNDS if 'RL_WARMUP_ROUNDS' in globals() else 5
+            
+            if round_idx >= warmup_rounds:
+                # We want to compare against dual attention directly
+                if hasattr(self, 'dual_attention_weights') and hasattr(self, 'current_round_gradients'):
+                    # Get dual attention weights and gradients from current round
+                    dual_weights = self.dual_attention_weights
+                    gradients = self.current_round_gradients
+                    
+                    # Save current model state
+                    current_state = {
+                        k: v.clone().detach() for k, v in self.global_model.state_dict().items()
+                    }
+                    
+                    # Apply dual attention weights to see what performance would be
+                    dual_updated_model = copy.deepcopy(self.global_model)
+                    
+                    from federated_learning.utils.model_utils import update_model_with_gradient
+                    
+                    # Get gradient using dual attention weights
+                    if AGGREGATION_METHOD == 'fedbn':
+                        dual_gradient = self._aggregate_fedbn(gradients, dual_weights)
+                    elif AGGREGATION_METHOD == 'fedprox':
+                        dual_gradient = self._aggregate_fedavg(gradients, dual_weights)
+                    elif AGGREGATION_METHOD == 'fedadmm':
+                        dual_gradient = self._aggregate_fedadmm(gradients, dual_weights)
+                    else:
+                        dual_gradient = self._aggregate_fedavg(gradients, dual_weights)
+                    
+                    # Apply the gradient to the model
+                    dual_updated_model, _, _ = update_model_with_gradient(
+                        dual_updated_model, 
+                        dual_gradient, 
+                        learning_rate=LR,
+                        proximal_mu=FEDPROX_MU if AGGREGATION_METHOD == 'fedprox' else 0.0,
+                        preserve_bn=AGGREGATION_METHOD == 'fedbn'
+                    )
+                    
+                    # Evaluate the model with dual attention weights
+                    from federated_learning.training.training_utils import test
+                    dual_attention_acc, dual_attention_loss = test(dual_updated_model, self.test_loader)
+                    
+                    print(f"Dual attention baseline: Loss = {dual_attention_loss:.4f}, Acc = {dual_attention_acc:.4f}")
+                    print(f"RL performance: Loss = {current_loss:.4f}, Acc = {current_acc:.4f}")
+                    
+                    # Restore original model state
+                    self.global_model.load_state_dict(current_state)
+                
+                # Calculate reward based on comparison with dual attention baseline or previous metrics
+                if dual_attention_loss is not None and dual_attention_acc is not None:
+                    # Calculate reward based on improvement over dual attention baseline
+                    loss_improvement = dual_attention_loss - current_loss
+                    acc_improvement = current_acc - dual_attention_acc
+                    
+                    # Reward based on improvement
+                    loss_reward = loss_improvement * 10.0  # Scale reward
+                    acc_reward = acc_improvement * 20.0   # Stronger weight on accuracy
+                    
+                    # Combine rewards
+                    reward = loss_reward + acc_reward
+                    
+                    print(f"RL Reward vs Dual Attention: {reward:.4f} (Loss component: {loss_reward:.4f}, Acc component: {acc_reward:.4f})")
+                else:
+                    # Fall back to comparing with previous metrics if dual attention comparison not available
+                    if current_loss < self.prev_validation_loss:
+                        # Improved loss - positive reward
+                        loss_reward = (self.prev_validation_loss - current_loss) * 10.0
+                    else:
+                        # Worse loss - negative reward
+                        loss_degradation = current_loss - self.prev_validation_loss
+                        loss_reward = -loss_degradation * 5.0
+                    
+                    # Reward for accuracy improvement
+                    if current_acc > self.prev_validation_acc:
+                        acc_reward = (current_acc - self.prev_validation_acc) * 20.0
+                    else:
+                        acc_reward = (current_acc - self.prev_validation_acc) * 10.0
+                    
+                    # Combine rewards
+                    reward = loss_reward + acc_reward
+                    
+                    print(f"RL Reward (vs previous): {reward:.4f} (Loss component: {loss_reward:.4f}, Acc component: {acc_reward:.4f})")
+                
+                # Update RL model
+                print(f"Updating RL model with reward: {reward:.4f}")
+                
+                # Add reward to actor-critic's rewards list
+                self.actor_critic.rewards.append(reward)
+                
+                # Save features for entropy bonus calculation
+                if not hasattr(self.actor_critic, 'saved_features'):
+                    self.actor_critic.saved_features = []
+                self.actor_critic.saved_features.append(features)
+                
+                # Update policy if we have accumulated rewards
+                if len(self.actor_critic.rewards) > 0:
+                    # Get optimizers with reduced learning rate for fine-tuning
+                    # Use 10x smaller learning rate compared to pre-training
+                    finetune_lr = (RL_LEARNING_RATE if 'RL_LEARNING_RATE' in globals() else 0.001) * 0.1
+                    
+                    actor_optimizer = torch.optim.Adam(
+                        self.actor_critic.actor.parameters(), 
+                        lr=finetune_lr
+                    )
+                    critic_optimizer = torch.optim.Adam(
+                        self.actor_critic.critic.parameters(),
+                        lr=finetune_lr
+                    )
+                    
+                    print(f"Fine-tuning with reduced learning rate: {finetune_lr:.6f}")
+                    
+                    from federated_learning.training.rl_training import update_policy
+                    update_policy(self.actor_critic, actor_optimizer, critic_optimizer)
+                    
+                    # Anneal temperature if needed
+                    current_temp = self.actor_critic.actor.temperature.item()
+                    min_temp = RL_MIN_TEMP if 'RL_MIN_TEMP' in globals() else 0.5
+                    
+                    if current_temp > min_temp:
+                        new_temp = max(current_temp * 0.95, min_temp)  # Reduce by 5% each round
+                        self.actor_critic.actor.set_temperature(new_temp)
+                        print(f"Annealed temperature from {current_temp:.4f} to {new_temp:.4f}")
+        
+        # Update previous metrics for next round
+        self.prev_validation_loss = current_loss
+        self.prev_validation_acc = current_acc
+        
+        # For the hybrid approach, if we're in a warmup or ramp period, we don't have a computed reward
+        # so we return a default value of 0
+        if 'reward' not in locals():
+            reward = 0.0
+            
+        return reward
+    
     def _plot_training_progress(self, test_errors, round_metrics):
-        """Plot training progress."""
+        """Plot training progress and save to file."""
         try:
             import matplotlib.pyplot as plt
             from datetime import datetime
@@ -1156,8 +1521,42 @@ class Server:
         # Create a list to store gradients
         root_gradients = []
         
-        # Collect gradients from each batch
-        for data, target in self.root_loader:
+        # Limit the number of batches to process
+        MAX_BATCHES = 10  # Process at most 10 batches for efficiency
+        MAX_GRADIENTS = 20  # Collect at most 20 gradients
+        MAX_TIME_SECONDS = 60  # Maximum 60 seconds for gradient collection
+        
+        # Get total batches and inform the user
+        total_batches = len(self.root_loader)
+        print(f"Root loader has {total_batches} batches. Will process at most {MAX_BATCHES} batches.")
+        
+        if total_batches == 0:
+            print("Warning: root_loader is empty!")
+            return []
+        
+        # Track start time for time limit
+        start_time = time.time()
+        
+        # Sample batches to process (up to MAX_BATCHES)
+        batches_to_process = min(total_batches, MAX_BATCHES)
+        batch_indices = list(range(batches_to_process))
+        
+        # Process each batch
+        for batch_idx, (data, target) in enumerate(self.root_loader):
+            # Skip if we've reached our batch limit
+            if batch_idx >= MAX_BATCHES:
+                break
+                
+            # Check time limit
+            elapsed_time = time.time() - start_time
+            if elapsed_time > MAX_TIME_SECONDS:
+                print(f"Time limit reached ({MAX_TIME_SECONDS}s). Stopping gradient collection.")
+                break
+                
+            # Only print progress for every 2nd batch or first/last
+            if batch_idx % 2 == 0 or batch_idx == batches_to_process - 1:
+                print(f"Collecting root gradients: batch {batch_idx+1}/{batches_to_process}")
+                
             data, target = data.to(self.device), target.to(self.device)
             
             # Forward pass
@@ -1171,8 +1570,15 @@ class Server:
             # Extract gradients
             gradient = torch.cat([p.grad.data.flatten() for p in temp_model.parameters() if p.requires_grad])
             root_gradients.append(gradient)
-        
-        print(f"Collected {len(root_gradients)} gradients from root dataset")
+            
+            # Stop if we've collected enough gradients
+            if len(root_gradients) >= MAX_GRADIENTS:
+                print(f"Collected maximum number of gradients ({MAX_GRADIENTS}). Stopping collection.")
+                break
+                
+        # Report elapsed time
+        elapsed_time = time.time() - start_time
+        print(f"Collected {len(root_gradients)} gradients from root dataset in {elapsed_time:.2f} seconds")
         return root_gradients
 
     def train_vae(self, root_gradients, vae_epochs=5):

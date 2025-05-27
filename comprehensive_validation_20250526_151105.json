@@ -1,0 +1,114 @@
+{
+  "summary": {
+    "total_tests": 6,
+    "passed_tests": 3,
+    "failed_tests": 3,
+    "average_duration": 91.8908353249232,
+    "total_duration": 551.3450119495392,
+    "timestamp": "20250526_151105"
+  },
+  "results": {
+    "MNIST_CNN_FedAvg_NoAttack": {
+      "success": true,
+      "duration": 138.17169833183289,
+      "metrics": {
+        "initial_accuracy": 0.9303,
+        "final_accuracy": 0.9307,
+        "initial_error": 0.0697,
+        "final_error": 0.0695,
+        "error_reduction": 0.0002
+      },
+      "analysis": {
+        "attack_applied": true,
+        "hybrid_phases_detected": true,
+        "detection_working": true,
+        "has_errors": true,
+        "completed_properly": true
+      },
+      "error_output": "",
+      "stdout_sample": "h total parameter change: 4.73951557\nAverage parameter change: 0.00003621\nGlobal model parameter change: 0.00003605\n\n--- Evaluating model for RL feedback ---\nTest Accuracy: 0.9307, Error Rate: 0.0693\nPost-update accuracy: 0.9307, error: 0.0693\n\n--- Updating RL model ---\n\n=== Final Model Evaluation ===\nTest Accuracy: 0.9307, Error Rate: 0.0693\nFinal test accuracy: 0.9307, error: 0.0693\nImprovement: -0.0004\nFinal global model saved to 'model_weights/final_global_model.pth'\nTraining progress plot saved as 'training_progress_20250526_150409.png'\nTraining metrics saved to training_metrics_20250526_150410.pt\nTraining progress plot saved to training_progress_20250526_150410.png\n\n=== Training Summary ===\nDataset: MNIST, Model: CNN\nTotal clients: 5, Malicious clients: 2\nAttack type: none\nAggregation method: fedavg\nRL aggregation method: hybrid\n  Warmup rounds: 5\n  Ramp-up rounds: 10\nInitial test error: 0.0697\nFinal test error: 0.0695\nError reduction: 0.0002 (0.29%)\n============================\n"
+    },
+    "MNIST_CNN_FedBN_NoAttack": {
+      "success": true,
+      "duration": 153.34085702896118,
+      "metrics": {
+        "initial_accuracy": 0.9368,
+        "final_accuracy": 0.9365,
+        "initial_error": 0.0632,
+        "final_error": 0.0632,
+        "error_reduction": 0.0
+      },
+      "analysis": {
+        "attack_applied": true,
+        "hybrid_phases_detected": true,
+        "detection_working": true,
+        "has_errors": true,
+        "completed_properly": true
+      },
+      "error_output": "",
+      "stdout_sample": "ith total parameter change: 4.70764151\nAverage parameter change: 0.00003597\nGlobal model parameter change: 0.00003581\n\n--- Evaluating model for RL feedback ---\nTest Accuracy: 0.9365, Error Rate: 0.0635\nPost-update accuracy: 0.9365, error: 0.0635\n\n--- Updating RL model ---\n\n=== Final Model Evaluation ===\nTest Accuracy: 0.9365, Error Rate: 0.0635\nFinal test accuracy: 0.9365, error: 0.0635\nImprovement: 0.0003\nFinal global model saved to 'model_weights/final_global_model.pth'\nTraining progress plot saved as 'training_progress_20250526_150642.png'\nTraining metrics saved to training_metrics_20250526_150643.pt\nTraining progress plot saved to training_progress_20250526_150643.png\n\n=== Training Summary ===\nDataset: MNIST, Model: CNN\nTotal clients: 5, Malicious clients: 2\nAttack type: none\nAggregation method: fedbn\nRL aggregation method: hybrid\n  Warmup rounds: 5\n  Ramp-up rounds: 10\nInitial test error: 0.0632\nFinal test error: 0.0632\nError reduction: 0.0000 (0.00%)\n============================\n"
+    },
+    "MNIST_CNN_FedAvg_ScalingAttack": {
+      "success": true,
+      "duration": 151.36693334579468,
+      "metrics": {
+        "initial_accuracy": 0.9325,
+        "final_accuracy": 0.9323,
+        "initial_error": 0.0675,
+        "final_error": 0.0677,
+        "error_reduction": -0.0002
+      },
+      "analysis": {
+        "attack_applied": true,
+        "hybrid_phases_detected": true,
+        "detection_working": true,
+        "has_errors": true,
+        "completed_properly": true
+      },
+      "error_output": "",
+      "stdout_sample": "ameter change: 1.26075437\nAverage parameter change: 0.00000963\nGlobal model parameter change: 0.00000959\n\n--- Evaluating model for RL feedback ---\nTest Accuracy: 0.9323, Error Rate: 0.0677\nPost-update accuracy: 0.9323, error: 0.0677\n\n--- Updating RL model ---\n\n=== Final Model Evaluation ===\nTest Accuracy: 0.9323, Error Rate: 0.0677\nFinal test accuracy: 0.9323, error: 0.0677\nImprovement: 0.0002\nFinal global model saved to 'model_weights/final_global_model.pth'\nTraining progress plot saved as 'training_progress_20250526_150914.png'\nTraining metrics saved to training_metrics_20250526_150915.pt\nTraining progress plot saved to training_progress_20250526_150915.png\n\n=== Training Summary ===\nDataset: MNIST, Model: CNN\nTotal clients: 5, Malicious clients: 2\nAttack type: scaling_attack\nAggregation method: fedavg\nRL aggregation method: hybrid\n  Warmup rounds: 5\n  Ramp-up rounds: 10\nInitial test error: 0.0675\nFinal test error: 0.0677\nError reduction: -0.0002 (-0.30%)\n============================\n"
+    },
+    "CIFAR10_CNN_FedAvg_NoAttack": {
+      "success": false,
+      "duration": 33.07079005241394,
+      "metrics": {},
+      "analysis": {
+        "attack_applied": false,
+        "hybrid_phases_detected": true,
+        "detection_working": false,
+        "has_errors": false,
+        "completed_properly": false
+      },
+      "error_output": "^^^\n  File \"C:\\Users\\narmafzar.alizamanii\\AppData\\Roaming\\Python\\Python313\\site-packages\\torch\\nn\\modules\\conv.py\", line 549, in _conv_forward\n    return F.conv2d(\n           ~~~~~~~~^\n        input, weight, bias, self.stride, self.padding, self.dilation, self.groups\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\nRuntimeError: Given groups=1, weight of size [32, 1, 3, 3], expected input[64, 3, 32, 32] to have 1 channels, but got 3 channels instead\n",
+      "stdout_sample": "3, 32, 32] to have 1 channels, but got 3 channels instead\nSkipping batch 78\nPretrain Epoch 1/1 completed without valid samples.\nPretraining completed\nFast mode: Loading saved root gradients from model_weights\\root_gradients.pt\nLoaded 10 saved root gradients\nFast mode: Loading saved VAE from model_weights\\vae.pth\nLoaded saved VAE model\nVAE training completed\nClient 3: Initialized as malicious with partial_scaling_attack attack\nClient 4: Initialized as malicious with partial_scaling_attack attack\nAdded 5 clients to server\nMalicious clients: 2\nFast mode: Loading saved dual attention model from model_weights\\dual_attention.pth\nLoaded saved dual attention model\n\n=== Pre-training RL Actor-Critic Model ===\nPre-training RL model...\nSkipping RL pre-training as RL_SKIP_PRETRAINING is True\nRL pre-training completed\n\n=== Starting Federated Learning Training ===\n\n=== Starting Federated Learning Process ===\nWarning: No test dataset specified, creating a default one\n\n=== Initial Model Evaluation ===\n"
+    },
+    "ALZHEIMER_RESNET18_FedBN_NoAttack": {
+      "success": false,
+      "duration": 28.165210962295532,
+      "metrics": {},
+      "analysis": {
+        "attack_applied": false,
+        "hybrid_phases_detected": true,
+        "detection_working": false,
+        "has_errors": false,
+        "completed_properly": false
+      },
+      "error_output": "^\n  File \"C:\\Users\\narmafzar.alizamanii\\AppData\\Roaming\\Python\\Python313\\site-packages\\torch\\nn\\modules\\conv.py\", line 549, in _conv_forward\n    return F.conv2d(\n           ~~~~~~~~^\n        input, weight, bias, self.stride, self.padding, self.dilation, self.groups\n        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\nRuntimeError: Given groups=1, weight of size [32, 1, 3, 3], expected input[64, 3, 128, 128] to have 1 channels, but got 3 channels instead\n",
+      "stdout_sample": " 128, 128] to have 1 channels, but got 3 channels instead\nSkipping batch 15\nPretrain Epoch 1/1 completed without valid samples.\nPretraining completed\nFast mode: Loading saved root gradients from model_weights\\root_gradients.pt\nLoaded 10 saved root gradients\nFast mode: Loading saved VAE from model_weights\\vae.pth\nLoaded saved VAE model\nVAE training completed\nClient 3: Initialized as malicious with partial_scaling_attack attack\nClient 4: Initialized as malicious with partial_scaling_attack attack\nAdded 5 clients to server\nMalicious clients: 2\nFast mode: Loading saved dual attention model from model_weights\\dual_attention.pth\nLoaded saved dual attention model\n\n=== Pre-training RL Actor-Critic Model ===\nPre-training RL model...\nSkipping RL pre-training as RL_SKIP_PRETRAINING is True\nRL pre-training completed\n\n=== Starting Federated Learning Training ===\n\n=== Starting Federated Learning Process ===\nWarning: No test dataset specified, creating a default one\n\n=== Initial Model Evaluation ===\n"
+    },
+    "MNIST_CNN_Extended_10Rounds": {
+      "success": false,
+      "duration": 47.22952222824097,
+      "metrics": {},
+      "analysis": {
+        "attack_applied": true,
+        "hybrid_phases_detected": true,
+        "detection_working": false,
+        "has_errors": true,
+        "completed_properly": false
+      },
+      "error_output": "  server.dual_attention = train_dual_attention(\n                            ~~~~~~~~~~~~~~~~~~~~^\n        root_features,\n        ^^^^^^^^^^^^^^\n        device=server.device\n        ^^^^^^^^^^^^^^^^^^^^\n    )\n    ^\n  File \"D:\\new_paper\\federated_learning\\training\\training_utils.py\", line 338, in train_dual_attention\n    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5, verbose=verbose)\nTypeError: ReduceLROnPlateau.__init__() got an unexpected keyword argument 'verbose'\n",
+      "stdout_sample": "zero variance. Adding noise for training stability.\nGenerating synthetic malicious features using multiple attack types\nGenerated 100 synthetic malicious feature vectors\n\nMalicious feature statistics:\nFeature 1: Mean = 0.1030, Std = 0.0883\n  Min = 0.0500, Max = 0.4239\n  Difference from honest: 0.1027 (30684.6%)\nFeature 2: Mean = 0.2223, Std = 0.1330\n  Min = 0.0500, Max = 0.5693\n  Difference from honest: -0.2685 (-54.7%)\nFeature 3: Mean = 0.2432, Std = 0.1287\n  Min = 0.0500, Max = 0.5286\n  Difference from honest: -0.2686 (-52.5%)\nFeature 4: Mean = 0.7983, Std = 0.1787\n  Min = 0.3031, Max = 0.9900\n  Difference from honest: 0.4698 (143.0%)\nFeature 5: Mean = 0.2835, Std = 0.1466\n  Min = 0.0500, Max = 0.6081\n  Difference from honest: -0.2287 (-44.7%)\nFeature 6: Mean = 0.7671, Std = 0.1821\n  Min = 0.1784, Max = 0.9900\n  Difference from honest: 0.2891 (60.5%)\nTotal feature differentiation: 1.6275\nClass weights - Honest: 5.5000, Malicious: 0.5500\nCreated DualAttention model with feature_dim=6\n"
+    }
+  }
+}

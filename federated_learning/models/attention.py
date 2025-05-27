@@ -336,8 +336,9 @@ class DualAttention(nn.Module):
             norm_mean = np.mean(norm_features)
             norm_std = np.std(norm_features)
             
-            # More sensitive threshold for high norm detection
-            norm_threshold = norm_mean + 0.7 * norm_std  # Reduced from 1.0 * std to 0.7 * std
+            # More selective threshold for high norm detection - only flag truly abnormal norms
+            # Increase threshold to 1.5 standard deviations to be more selective
+            norm_threshold = norm_mean + 1.5 * norm_std  # Increased from 0.7 * std to 1.5 * std
             
             # Find clients with abnormally high gradient norms
             high_norm_indices = []
@@ -347,8 +348,28 @@ class DualAttention(nn.Module):
                     print(f"Detected client {i} as suspicious due to high gradient norm: {norm:.4f} (threshold: {norm_threshold:.4f})")
                     print(f"  This is {(norm - norm_mean) / norm_std:.2f} standard deviations above the mean")
             
-            # Combine malicious indices from both methods
-            malicious_indices = list(set(malicious_indices + high_norm_indices))
+            # SPECIAL DETECTION FOR ZERO/VERY LOW GRADIENT ATTACKS
+            # Check for abnormally low gradient norms (zero attacks)
+            zero_threshold = 0.1  # Very low threshold for zero detection
+            low_norm_indices = []
+            
+            # Only consider it suspicious if there are also normal gradients present
+            normal_gradients_exist = any(norm > zero_threshold * 2 for norm in norm_features)
+            
+            if normal_gradients_exist:
+                for i, norm in enumerate(norm_features):
+                    if norm < zero_threshold:
+                        low_norm_indices.append(i)
+                        print(f"Detected client {i} as suspicious due to very low gradient norm (zero attack): {norm:.4f} (threshold: {zero_threshold:.4f})")
+                        
+                        # Also check sign consistency - zero gradients often have zero consistency
+                        if features.shape[1] > 4:  # Ensure we have sign consistency feature
+                            sign_consistency = features[i, 4].item()
+                            if sign_consistency < 0.1:
+                                print(f"  Client {i} also has very low sign consistency: {sign_consistency:.4f} (confirms zero attack)")
+            
+            # Combine malicious indices from all methods
+            malicious_indices = list(set(malicious_indices + high_norm_indices + low_norm_indices))
             
             # Sort for consistent output
             malicious_indices.sort()
@@ -372,6 +393,18 @@ class DualAttention(nn.Module):
                         
                         print(f"Applied strong penalty of {penalty_strength:.4f} to client {idx} due to high gradient norm")
                         print(f"  Weight reduced from {(1.0 - malicious_scores[idx]).item():.4f} to {weights[idx].item():.4f}")
+                    
+                    # If it's a zero/low norm client, apply strong penalty
+                    elif idx in low_norm_indices:
+                        # Zero attacks get very strong penalty
+                        penalty_strength = min(0.95, MALICIOUS_PENALTY_FACTOR * 0.9)  # Strong penalty for zero attacks
+                        
+                        # Apply penalty (reduce weight by penalty_strength percentage)
+                        weights[idx] = weights[idx] * (1 - penalty_strength)
+                        
+                        print(f"Applied strong penalty of {penalty_strength:.4f} to client {idx} due to zero/low gradient norm (zero attack)")
+                        print(f"  Weight reduced from {(1.0 - malicious_scores[idx]).item():.4f} to {weights[idx].item():.4f}")
+                    
                     else:
                         # For detection based on malicious score, apply standard penalty
                         distance_from_mean = (malicious_scores[idx] - mean_malicious) / (std_malicious + 1e-5)

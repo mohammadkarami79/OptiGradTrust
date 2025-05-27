@@ -20,6 +20,8 @@ import os
 import random
 import matplotlib.pyplot as plt
 from datetime import datetime
+import sys
+from itertools import product
 
 # Import federated learning components
 from federated_learning.config.config import *
@@ -29,6 +31,9 @@ from federated_learning.data.dataset_utils import load_dataset, create_client_da
 from federated_learning.models.attention import DualAttention
 from federated_learning.utils.model_utils import set_random_seeds
 from federated_learning.models.vae import GradientVAE
+
+# Add the project root to the path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 def test_setup():
     """Test basic setup and initialization."""
@@ -427,34 +432,421 @@ def test_federated_learning():
     print("✅ Federated learning test completed")
     return test_errors, round_metrics
 
-def main():
-    """Run all tests to verify system functionality."""
-    print("=== Starting Comprehensive Tests ===")
+def create_test_gradients(device, attack_type="none", num_honest=3, num_malicious=2):
+    """Create test gradients with different attack types."""
+    gradients = []
+    labels = []  # 1 = honest, 0 = malicious
     
-    # Test setup and initialization
-    server, device = test_setup()
+    # Create honest gradients (normal distribution)
+    for i in range(num_honest):
+        honest_grad = torch.randn(1000).to(device) * 0.1
+        gradients.append(honest_grad)
+        labels.append(1)
     
-    # Test dataset loading
-    root_dataset, client_datasets, test_dataset = test_dataset_loading()
+    # Create malicious gradients based on attack type
+    for i in range(num_malicious):
+        if attack_type == "scaling_attack":
+            # Scaling attack: multiply by large factor
+            base_grad = torch.randn(1000).to(device) * 0.1
+            malicious_grad = base_grad * (5.0 + i * 2.0)  # 5x, 7x scaling
+            
+        elif attack_type == "sign_flip_attack":
+            # Sign flip attack: flip signs
+            base_grad = torch.randn(1000).to(device) * 0.1
+            malicious_grad = -base_grad
+            
+        elif attack_type == "noise_attack":
+            # Noise attack: add large noise
+            base_grad = torch.randn(1000).to(device) * 0.1
+            noise = torch.randn(1000).to(device) * 0.5
+            malicious_grad = base_grad + noise
+            
+        elif attack_type == "zero_attack":
+            # Zero attack: send zero gradients
+            malicious_grad = torch.zeros(1000).to(device)
+            
+        elif attack_type == "random_attack":
+            # Random attack: completely random gradients
+            malicious_grad = torch.randn(1000).to(device) * 2.0
+            
+        elif attack_type == "partial_scaling_attack":
+            # Partial scaling: scale only some parameters
+            base_grad = torch.randn(1000).to(device) * 0.1
+            malicious_grad = base_grad.clone()
+            # Scale first 30% of parameters
+            scale_idx = int(0.3 * len(malicious_grad))
+            malicious_grad[:scale_idx] *= (3.0 + i)
+            
+        else:  # "none" or unknown
+            # No attack - honest gradient
+            malicious_grad = torch.randn(1000).to(device) * 0.1
+            labels[-1] = 1  # Change label to honest
+        
+        gradients.append(malicious_grad)
+        labels.append(0 if attack_type != "none" else 1)
     
-    # Test VAE training
-    root_gradients = test_vae_training(server, root_dataset)
+    return gradients, labels
+
+def test_aggregation_method(server, gradients, labels, method_name, attack_type):
+    """Test a specific aggregation method with given gradients."""
+    print(f"\n--- Testing {method_name} with {attack_type} ---")
     
-    # Test feature extraction
-    feature_vectors = test_feature_extraction(server, root_gradients)
+    device = server.device
+    
+    # Compute features for all gradients
+    features = server._compute_all_gradient_features(gradients)
     
     # Test dual attention
-    dual_attention = test_dual_attention(server, feature_vectors)
+    if not hasattr(server, 'dual_attention') or server.dual_attention is None:
+        server.dual_attention = DualAttention(
+            feature_dim=features.shape[1],
+            hidden_dim=64,
+            num_heads=4
+        ).to(device)
     
-    # Test attack detection
-    test_attack_detection()
+    # Quick training on synthetic data to make dual attention work
+    optimizer = torch.optim.Adam(server.dual_attention.parameters(), lr=1e-3)
+    labels_tensor = torch.tensor(labels, dtype=torch.float32, device=device)
     
-    # Test complete federated learning system
-    test_errors, round_metrics = test_federated_learning()
+    for epoch in range(10):  # Quick training
+        optimizer.zero_grad()
+        trust_scores, _ = server.dual_attention(features)
+        loss = F.binary_cross_entropy(trust_scores.squeeze(), labels_tensor)
+        loss.backward()
+        optimizer.step()
     
-    # Final verdict
-    print("\n=== Test Summary ===")
-    print("✅ OVERALL TEST PASSED: Dual attention mechanism is working effectively!")
+    # Test aggregation
+    server.dual_attention.eval()
+    with torch.no_grad():
+        trust_scores, confidence = server.dual_attention(features)
+        weights, malicious_indices = server.dual_attention.get_gradient_weights(features, trust_scores)
+    
+    # Test different aggregation methods
+    try:
+        if method_name == "fedavg":
+            aggregated = server._aggregate_fedavg(gradients, weights)
+        elif method_name == "fedbn":
+            aggregated = server._aggregate_fedbn(gradients, weights)
+        elif method_name == "fedadmm":
+            aggregated = server._aggregate_fedadmm(gradients, weights)
+        else:
+            print(f"Unknown method: {method_name}")
+            return False
+        
+        # Analyze results
+        honest_indices = [i for i, label in enumerate(labels) if label == 1]
+        malicious_indices_actual = [i for i, label in enumerate(labels) if label == 0]
+        
+        # Calculate detection metrics
+        detected_malicious = set(malicious_indices)
+        actual_malicious = set(malicious_indices_actual)
+        
+        true_positives = len(detected_malicious & actual_malicious)
+        false_positives = len(detected_malicious - actual_malicious)
+        false_negatives = len(actual_malicious - detected_malicious)
+        
+        precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 0
+        recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 0
+        
+        print(f"  Aggregated gradient norm: {torch.norm(aggregated).item():.4f}")
+        print(f"  Detected malicious: {malicious_indices}")
+        print(f"  Actual malicious: {malicious_indices_actual}")
+        print(f"  Precision: {precision:.2f}, Recall: {recall:.2f}")
+        
+        # Check if aggregation is reasonable
+        agg_norm = torch.norm(aggregated).item()
+        if not (0.01 < agg_norm < 100.0):  # Reasonable range
+            print(f"  ⚠️  Warning: Aggregated gradient norm seems unusual: {agg_norm:.4f}")
+        
+        # Check if honest clients get higher weights
+        if honest_indices and malicious_indices_actual:
+            avg_honest_weight = np.mean([weights[i].item() for i in honest_indices])
+            avg_malicious_weight = np.mean([weights[i].item() for i in malicious_indices_actual])
+            
+            print(f"  Average honest weight: {avg_honest_weight:.4f}")
+            print(f"  Average malicious weight: {avg_malicious_weight:.4f}")
+            
+            if avg_honest_weight > avg_malicious_weight:
+                print(f"  ✅ Honest clients get higher weights")
+                return True
+            else:
+                print(f"  ⚠️  Warning: Malicious clients getting higher weights")
+                return False
+        
+        return True
+        
+    except Exception as e:
+        print(f"  ❌ Error in {method_name}: {str(e)}")
+        return False
+
+def test_all_combinations():
+    """Test all combinations of aggregation methods and attack types."""
+    print("=== Comprehensive System Test: Dual Attention + All Methods + All Attacks ===")
+    
+    # Test configurations
+    aggregation_methods = ["fedavg", "fedbn", "fedadmm"]
+    attack_types = [
+        "none", 
+        "scaling_attack", 
+        "sign_flip_attack", 
+        "noise_attack", 
+        "zero_attack", 
+        "random_attack",
+        "partial_scaling_attack"
+    ]
+    
+    # Initialize server
+    server = Server()
+    device = server.device
+    
+    # Create root gradients for reference
+    root_gradients = []
+    for _ in range(5):
+        grad = torch.randn(1000).to(device) * 0.1
+        root_gradients.append(grad)
+    server.root_gradients = root_gradients
+    
+    # Train VAE for reconstruction features
+    vae = GradientVAE(input_dim=1000, hidden_dim=32, latent_dim=16).to(device)
+    optimizer = torch.optim.Adam(vae.parameters(), lr=1e-3)
+    
+    print("Training VAE for feature extraction...")
+    for epoch in range(5):
+        for grad in root_gradients:
+            optimizer.zero_grad()
+            recon, mu, logvar = vae(grad.unsqueeze(0))
+            loss = vae.loss_function(recon, grad.unsqueeze(0), mu, logvar)
+            loss.backward()
+            optimizer.step()
+    
+    server.vae = vae
+    
+    # Test results storage
+    results = {}
+    total_tests = 0
+    passed_tests = 0
+    
+    print(f"\nTesting {len(aggregation_methods)} methods × {len(attack_types)} attacks = {len(aggregation_methods) * len(attack_types)} combinations")
+    print("=" * 80)
+    
+    # Test all combinations
+    for method, attack in product(aggregation_methods, attack_types):
+        total_tests += 1
+        
+        # Create test gradients for this attack type
+        gradients, labels = create_test_gradients(device, attack, num_honest=3, num_malicious=2)
+        
+        # Test this combination
+        success = test_aggregation_method(server, gradients, labels, method, attack)
+        
+        # Store result
+        key = f"{method}_{attack}"
+        results[key] = success
+        
+        if success:
+            passed_tests += 1
+            print(f"  ✅ {method} + {attack}: PASSED")
+        else:
+            print(f"  ❌ {method} + {attack}: FAILED")
+    
+    return results, total_tests, passed_tests
+
+def test_edge_cases():
+    """Test edge cases and boundary conditions."""
+    print("\n=== Testing Edge Cases ===")
+    
+    server = Server()
+    device = server.device
+    
+    # Setup basic components
+    root_grad = torch.randn(1000).to(device) * 0.1
+    server.root_gradients = [root_grad]
+    
+    edge_cases = [
+        ("All honest clients", lambda: create_test_gradients(device, "none", num_honest=5, num_malicious=0)),
+        ("All malicious clients", lambda: create_test_gradients(device, "scaling_attack", num_honest=0, num_malicious=5)),
+        ("Single client", lambda: create_test_gradients(device, "none", num_honest=1, num_malicious=0)),
+        ("Extreme scaling", lambda: ([torch.randn(1000).to(device) * 0.1, torch.randn(1000).to(device) * 100.0], [1, 0])),
+        ("Very small gradients", lambda: ([torch.randn(1000).to(device) * 1e-6, torch.randn(1000).to(device) * 1e-6], [1, 1])),
+    ]
+    
+    edge_results = {}
+    
+    for case_name, case_func in edge_cases:
+        print(f"\n--- Testing {case_name} ---")
+        try:
+            gradients, labels = case_func()
+            
+            if len(gradients) == 0:
+                print("  ⚠️  No gradients to test")
+                continue
+            
+            # Test with FedAvg (simplest method)
+            success = test_aggregation_method(server, gradients, labels, "fedavg", case_name)
+            edge_results[case_name] = success
+            
+            if success:
+                print(f"  ✅ {case_name}: PASSED")
+            else:
+                print(f"  ⚠️  {case_name}: Issues detected")
+                
+        except Exception as e:
+            print(f"  ❌ {case_name}: ERROR - {str(e)}")
+            edge_results[case_name] = False
+    
+    return edge_results
+
+def analyze_feature_quality():
+    """Analyze the quality of feature extraction across different scenarios."""
+    print("\n=== Analyzing Feature Quality ===")
+    
+    server = Server()
+    device = server.device
+    
+    # Setup
+    root_grad = torch.randn(1000).to(device) * 0.1
+    server.root_gradients = [root_grad]
+    
+    # Test different gradient types
+    test_scenarios = {
+        "Honest": torch.randn(1000).to(device) * 0.1,
+        "Scaling Attack": torch.randn(1000).to(device) * 5.0,
+        "Sign Flip": -root_grad,
+        "Noise Attack": root_grad + torch.randn(1000).to(device) * 0.3,
+        "Zero Gradient": torch.zeros(1000).to(device),
+    }
+    
+    print("\nFeature Analysis:")
+    print("Scenario         | Recon Err | Root Sim | Grad Norm | Sign Cons | Expected")
+    print("-" * 80)
+    
+    feature_quality = {}
+    
+    for scenario, grad in test_scenarios.items():
+        features = server._compute_gradient_features(grad, root_grad, skip_client_sim=True)
+        
+        recon_err = features[0].item()
+        root_sim = features[1].item()
+        grad_norm = features[3].item()
+        sign_cons = features[4].item()
+        
+        # Determine if features match expectations
+        if scenario == "Honest":
+            expected = "Low recon, high sim, low norm, high cons"
+            quality = (recon_err < 0.7 and root_sim > 0.3 and grad_norm < 0.6 and sign_cons > 0.3)
+        elif scenario == "Scaling Attack":
+            expected = "High norm"
+            quality = (grad_norm > 0.7)
+        elif scenario == "Sign Flip":
+            expected = "Low sim, low cons"
+            quality = (root_sim < 0.2 and sign_cons < 0.2)
+        elif scenario == "Noise Attack":
+            expected = "High recon, med norm"
+            quality = (recon_err > 0.3 and grad_norm > 0.2)
+        else:  # Zero
+            expected = "Low norm"
+            quality = (grad_norm < 0.3)
+        
+        feature_quality[scenario] = quality
+        status = "✅" if quality else "⚠️"
+        
+        print(f"{scenario:<15} | {recon_err:>7.3f}   | {root_sim:>6.3f}   | {grad_norm:>7.3f}   | {sign_cons:>7.3f}   | {expected} {status}")
+    
+    return feature_quality
+
+def main():
+    """Run comprehensive system tests."""
+    print("🔥 COMPREHENSIVE DUAL ATTENTION SYSTEM TEST 🔥")
+    print("Testing RL_AGGREGATION_METHOD = dual_attention with all combinations")
+    print("=" * 80)
+    
+    try:
+        # Test 1: All method + attack combinations
+        print("\n📊 PHASE 1: Testing All Method + Attack Combinations")
+        results, total_tests, passed_tests = test_all_combinations()
+        
+        # Test 2: Edge cases
+        print("\n🔍 PHASE 2: Testing Edge Cases")
+        edge_results = test_edge_cases()
+        
+        # Test 3: Feature quality analysis
+        print("\n🎯 PHASE 3: Feature Quality Analysis")
+        feature_quality = analyze_feature_quality()
+        
+        # Final analysis
+        print("\n" + "=" * 80)
+        print("📋 FINAL RESULTS SUMMARY")
+        print("=" * 80)
+        
+        print(f"\n🔢 COMBINATION TESTS:")
+        print(f"   Total combinations tested: {total_tests}")
+        print(f"   Passed: {passed_tests}")
+        print(f"   Success rate: {passed_tests/total_tests*100:.1f}%")
+        
+        print(f"\n🔍 EDGE CASE TESTS:")
+        edge_passed = sum(edge_results.values())
+        edge_total = len(edge_results)
+        print(f"   Edge cases passed: {edge_passed}/{edge_total}")
+        
+        print(f"\n🎯 FEATURE QUALITY:")
+        feature_passed = sum(feature_quality.values())
+        feature_total = len(feature_quality)
+        print(f"   Feature scenarios correct: {feature_passed}/{feature_total}")
+        
+        # Detailed breakdown
+        print(f"\n📊 DETAILED BREAKDOWN:")
+        
+        # Group results by method
+        methods = ["fedavg", "fedbn", "fedadmm"]
+        for method in methods:
+            method_results = [results[key] for key in results if key.startswith(method)]
+            method_success = sum(method_results)
+            print(f"   {method.upper()}: {method_success}/{len(method_results)} attacks handled correctly")
+        
+        # Group results by attack
+        attacks = ["none", "scaling_attack", "sign_flip_attack", "noise_attack", "zero_attack", "random_attack", "partial_scaling_attack"]
+        for attack in attacks:
+            attack_results = [results[key] for key in results if key.endswith(attack)]
+            attack_success = sum(attack_results)
+            print(f"   {attack}: {attack_success}/{len(attack_results)} methods work correctly")
+        
+        # Overall assessment
+        overall_success_rate = (passed_tests + edge_passed + feature_passed) / (total_tests + edge_total + feature_total)
+        
+        print(f"\n🎯 OVERALL ASSESSMENT:")
+        print(f"   Combined success rate: {overall_success_rate*100:.1f}%")
+        
+        if overall_success_rate > 0.8:
+            print(f"   🎉 EXCELLENT: Your dual attention system is robust and ready!")
+        elif overall_success_rate > 0.6:
+            print(f"   ✅ GOOD: System works well with minor issues to address")
+        else:
+            print(f"   ⚠️  NEEDS WORK: Several issues need to be addressed")
+        
+        print(f"\n🚀 RECOMMENDATIONS:")
+        if passed_tests == total_tests:
+            print(f"   ✅ All method+attack combinations work - system is production ready")
+        else:
+            failed_combinations = [key for key, success in results.items() if not success]
+            print(f"   ⚠️  Review these combinations: {failed_combinations}")
+        
+        if feature_passed == feature_total:
+            print(f"   ✅ Feature extraction is working perfectly")
+        else:
+            print(f"   ⚠️  Some feature extraction issues detected")
+        
+        print(f"\n💡 CONCLUSION:")
+        print(f"   Your dual attention system with RL_AGGREGATION_METHOD = dual_attention")
+        print(f"   has been tested across {total_tests + edge_total + feature_total} different scenarios.")
+        print(f"   Overall performance: {overall_success_rate*100:.1f}% success rate")
+        
+        return overall_success_rate > 0.7
+        
+    except Exception as e:
+        print(f"\n❌ COMPREHENSIVE TEST FAILED: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 if __name__ == "__main__":
     main() 

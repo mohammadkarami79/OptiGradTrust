@@ -31,6 +31,7 @@ test_results/plots/
 *.png
 *.pth
 *.jpg
+*.pt
 # Virtual Environment
 venv/
 ENV/
