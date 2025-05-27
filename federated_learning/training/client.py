@@ -175,7 +175,7 @@ class Client:
     هر کلاینت دارای داده‌های محلی خودش است و می‌تواند یک مدل را آموزش دهد.
     """
     
-    def __init__(self, client_id, dataset, is_malicious=False, num_classes=None):
+    def __init__(self, client_id, dataset, is_malicious=False, num_classes=None, local_epochs=None):
         """
         مقداردهی اولیه یک کلاینت
         
@@ -184,11 +184,13 @@ class Client:
             dataset: مجموعه داده‌های محلی کلاینت
             is_malicious: آیا این کلاینت مخرب است؟
             num_classes: تعداد کلاس‌های مدل
+            local_epochs: تعداد دوره‌های آموزش محلی (اگر None باشد، از مقدار پیش‌فرض استفاده می‌شود)
         """
         self.client_id = client_id
         self.dataset = dataset
         self.is_malicious = is_malicious
         self.num_classes = num_classes
+        self.local_epochs = local_epochs if local_epochs is not None else LOCAL_EPOCHS_CLIENT
         
         # Set device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -211,10 +213,28 @@ class Client:
         
         # Initialize model based on config
         if MODEL == 'CNN':
-            self.model = CNNMnist().to(self.device)
+            # Determine input channels and number of classes based on dataset
+            if DATASET == 'MNIST':
+                in_channels = 1
+                num_classes = 10
+            elif DATASET == 'CIFAR10':
+                in_channels = 3
+                num_classes = 10
+            elif DATASET == 'ALZHEIMER':
+                in_channels = 3
+                num_classes = ALZHEIMER_CLASSES
+            else:
+                # Default fallback
+                in_channels = 1
+                num_classes = 10
+                
+            self.model = CNNMnist(in_channels=in_channels, num_classes=num_classes).to(self.device)
+            
         elif MODEL == 'RESNET50':
             if num_classes is None:
                 if DATASET == 'MNIST':
+                    num_classes = 10
+                elif DATASET == 'CIFAR10':
                     num_classes = 10
                 elif DATASET == 'ALZHEIMER':
                     num_classes = ALZHEIMER_CLASSES
@@ -226,9 +246,12 @@ class Client:
                 unfreeze_layers=RESNET50_UNFREEZE_LAYERS,
                 pretrained=RESNET_PRETRAINED
             ).to(self.device)
+            
         elif MODEL == 'RESNET18':
             if num_classes is None:
                 if DATASET == 'MNIST':
+                    num_classes = 10
+                elif DATASET == 'CIFAR10':
                     num_classes = 10
                 elif DATASET == 'ALZHEIMER':
                     num_classes = ALZHEIMER_CLASSES
@@ -240,6 +263,7 @@ class Client:
                 unfreeze_layers=RESNET18_UNFREEZE_LAYERS,
                 pretrained=RESNET_PRETRAINED
             ).to(self.device)
+            
         else:
             raise ValueError(f"Unknown model type: {MODEL}")
             
@@ -356,12 +380,10 @@ class Client:
         # Set optimizer and move to correct device
         self.optimizer = optim.SGD(self.model.parameters(), lr=LR)
         
-        # Train for local epochs
-        local_epochs = LOCAL_EPOCHS_CLIENT
-            
-        print(f"Client {self.client_id}: Training for {local_epochs} local epochs")
+        # Use the instance local_epochs variable
+        print(f"Client {self.client_id}: Training for {self.local_epochs} local epochs")
         
-        for epoch in range(local_epochs):
+        for epoch in range(self.local_epochs):
             epoch_loss = 0
             correct = 0
             total = 0
@@ -419,7 +441,7 @@ class Client:
                         raise e
                 
                 # Early stopping to prevent over-training by malicious clients
-                if self.is_malicious and epoch >= min(local_epochs // 2, 1) and batch_idx >= len(self.train_loader) // 4:
+                if self.is_malicious and epoch >= min(self.local_epochs // 2, 1) and batch_idx >= len(self.train_loader) // 4:
                     print(f"Malicious client {self.client_id}: Early stopping training")
                     break
             
@@ -459,7 +481,7 @@ class Client:
             # Print epoch statistics
             accuracy = 100. * correct / total if total > 0 else 0
             avg_loss = epoch_loss / (batch_idx + 1) if batch_idx > 0 else 0
-            print(f"Client {self.client_id}, Epoch {epoch+1}/{local_epochs}: Loss: {avg_loss:.6f}, Accuracy: {accuracy:.2f}%")
+            print(f"Client {self.client_id}, Epoch {epoch+1}/{self.local_epochs}: Loss: {avg_loss:.6f}, Accuracy: {accuracy:.2f}%")
         
         # Extract the learned model update
         # This is simply the difference from the global model

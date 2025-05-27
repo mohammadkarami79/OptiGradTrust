@@ -97,8 +97,8 @@ MODEL = 'CNN'                      # Options: 'CNN', 'RESNET18', 'RESNET50'
 
 # ResNet configuration
 RESNET50_UNFREEZE_LAYERS = 20      # Number of layers to unfreeze from the end for ResNet50
-RESNET18_UNFREEZE_LAYERS = 5     # Number of layers to unfreeze from the end for ResNet18
-RESNET_PRETRAINED = True          # Whether to use pretrained weights
+RESNET18_UNFREEZE_LAYERS = 5       # Number of layers to unfreeze from the end for ResNet18
+RESNET_PRETRAINED = True           # Whether to use pretrained weights
 
 # Dataset paths
 ALZHEIMER_DATA_ROOT = 'data/alzheimer'
@@ -121,7 +121,7 @@ VAE_LEARNING_RATE = 0.001        # Learning rate for VAE training
 VAE_PROJECTION_DIM = 128         # Much smaller projection dimension
 VAE_HIDDEN_DIM = 64              # Hidden dimension for VAE
 VAE_LATENT_DIM = 32              # Latent dimension for VAE
-GRADIENT_DIMENSION = 131466      # Input dimension for gradient processing (CNN model size)
+GRADIENT_DIMENSION = None        # Placeholder: Will be determined dynamically based on the model
 
 # ======================================
 # DATA DISTRIBUTION CONFIGURATION
@@ -142,10 +142,10 @@ BIAS_PROBABILITY = 0.1
 BIAS_CLASS = 1
 
 # ======================================
-# AGGREGATION METHOD CONFIGURATION
+# GRADIENT COMBINATION METHOD CONFIGURATION
 # ======================================
 
-# Available aggregation methods:
+# Available gradient combination methods:
 # - 'fedavg': Standard Federated Averaging (McMahan et al.)
 # - 'fedprox': Adds proximal term to client optimization (Li et al.)
 # - 'fedadmm': Alternating Direction Method of Multipliers for FL (Wang et al.)
@@ -153,7 +153,10 @@ BIAS_CLASS = 1
 # - 'feddwa': Dynamic weighted aggregation based on client performance (Chai et al.)
 # - 'fednova': Normalized averaging based on local optimization steps (Wang et al.)
 # - 'fedbn_fedprox': Combination of FedBN and FedProx methods
-AGGREGATION_METHOD = 'fedbn'     # Using our improved FedBN implementation
+GRADIENT_COMBINATION_METHOD = 'fedbn'     # Using our improved FedBN implementation
+
+# For backward compatibility
+AGGREGATION_METHOD = GRADIENT_COMBINATION_METHOD
 
 # FedProx parameters
 FEDPROX_MU = 0.1                 # μ coefficient for proximal term
@@ -195,10 +198,37 @@ MALICIOUS_WEIGHTING_METHOD = 'continuous'
 # Malicious penalty factor (0-1)
 # Higher values (closer to 1) give much lower weights to detected malicious clients
 # Lower values are more lenient. 0 means no special penalty beyond trust score
-MALICIOUS_PENALTY_FACTOR = 0.95  # Increased from 0.9 to 0.95 for stronger penalties on malicious clients
+MALICIOUS_PENALTY_FACTOR = 0.98  # Strong penalty for detected malicious clients
 
 # Attacker impact weighing
 ATTACKER_IMPACT_WEIGHING = True    # Enable attacker impact weighing
+
+
+# ======================================
+# RL-BASED AGGREGATION CONFIGURATION
+# ======================================
+
+# Aggregation method selection
+# Options: 'dual_attention', 'rl_actor_critic', 'hybrid'
+# - 'dual_attention': Use only the dual attention mechanism
+# - 'rl_actor_critic': Use only the RL actor-critic approach
+# - 'hybrid': Start with dual attention, then gradually transition to RL
+RL_AGGREGATION_METHOD = 'hybrid'  # Options: 'dual_attention', 'rl_actor_critic', 'hybrid'
+
+# RL Actor-Critic Parameters
+RL_ACTOR_HIDDEN_DIMS = [128, 64]       # Hidden layer dimensions for actor network
+RL_CRITIC_HIDDEN_DIMS = [128, 64]      # Hidden layer dimensions for critic network
+RL_LEARNING_RATE = 0.001
+RL_GAMMA = 0.99
+RL_ENTROPY_COEF = 0.01
+RL_INITIAL_TEMP = 5.0
+RL_MIN_TEMP = 0.5
+RL_SKIP_PRETRAINING = True  # Skip RL pretraining by default to speed up execution
+RL_WARMUP_ROUNDS = 5
+RL_RAMP_UP_ROUNDS = 10
+RL_PRETRAINING_EPISODES = 100
+RL_VALIDATION_MINIBATCH = 0.2
+RL_SAVE_INTERVAL = 50
 
 # ======================================
 # ATTACK CONFIGURATION

@@ -1,12 +1,8 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
 build/
 develop-eggs/
@@ -28,25 +24,103 @@ wheels/
 venv/
 env/
 .env/
+ENV/
 
-# PyCharm
+# IDE
 .idea/
-
-# VS Code
 .vscode/
+*.swp
+*.swo
 
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Data files
+# Data directories and files
+data/
 *.pkl
 *.h5
-data/MNIST/
+*.npy
+*.npz
+*.mat
+*.csv
+*.tsv
+*.json
+*.jsonl
 
-# Logs and checkpoints
+# Model files and weights
+model_weights/
+*.pt
+*.pth
+*.ckpt
+*.pb
+*.onnx
+*.tflite
+*.lite
+*.trt
+
+# Logs and output
+logs/
 *.log
-checkpoints/
+output.txt
+*.out
+test_results/
+archived/
 
-# OS specific
+# Images and media
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.ico
+*.svg
+*.mp4
+*.avi
+*.mov
+*.wmv
+*.flv
+*.pdf
+
+# Specific directories
+federated_learning/logs/
+federated_learning/model_weights/
+federated_learning.egg-info/
+archived/
+test_results/
+data/MNIST/
+data/alzheimer/
+data/cifar/
+
+# Reports and documentation
+COMPLETE_VALIDATION_REPORT.md
+FINAL_VALIDATION_REPORT.md
+comprehensive_validation_*.json
+training_metrics_*.pt
+training_progress_*.png
+
+# OS generated files
 .DS_Store
-Thumbs.db 
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Large binary files
+*.bin
+*.dat
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Cache directories
+.cache/
+.pytest_cache/
+__pycache__/ 
