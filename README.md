@@ -422,8 +422,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 For questions, issues, or collaboration opportunities:
 - Create an issue on GitHub
-- Contact: [Your Email]
-- Documentation: [Wiki/Docs URL]
+- Contact: [mohammad.karami79@ut.ac.ir]
 
 ---
 
