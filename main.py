@@ -43,201 +43,174 @@ if BATCH_SIZE < MIN_BATCH_SIZE:
     BATCH_SIZE = MIN_BATCH_SIZE
 
 def main():
-    """Main function to run the federated learning system."""
-    # Set random seeds for reproducibility
+    """Main function to run the federated learning experiment."""
+    
+    # Initialize results dictionary
+    results = {
+        'timestamp': datetime.now().isoformat(),
+        'config': {
+            'DATASET': DATASET,
+            'MODEL': MODEL,
+            'AGGREGATION_METHOD': AGGREGATION_METHOD,
+            'ATTACK_TYPE': ATTACK_TYPE,
+            'NUM_CLIENTS': NUM_CLIENTS,
+            'FRACTION_MALICIOUS': FRACTION_MALICIOUS,
+            'GLOBAL_EPOCHS': GLOBAL_EPOCHS,
+            'SCALING_FACTOR': SCALING_FACTOR
+        },
+        'status': 'started'
+    }
+    
+    # Step 1: Set random seed for reproducibility
+    print("Setting random seed for reproducibility...")
     if RANDOM_SEED is not None:
         set_random_seeds(RANDOM_SEED)
-        print(f"Random seeds set to {RANDOM_SEED}")
+        print(f"Random seed set to: {RANDOM_SEED}")
     
-    # Create server and datasets
-    print("\n--- Creating server and clients ---")
-    server = Server()
-    
-    # Step 1: Load dataset
-    # Determine the data path based on dataset type
-    if DATASET == 'MNIST':
-        data_path = MNIST_DATA_ROOT
-    elif DATASET == 'ALZHEIMER':
-        data_path = ALZHEIMER_DATA_ROOT
-    elif DATASET == 'CIFAR10':
-        data_path = CIFAR_DATA_ROOT
-    else:
-        data_path = './data'  # Default path
-        
-    # Load the dataset using the appropriate function
+    # Step 2: Load and preprocess data
+    print("\n--- Loading and preprocessing data ---")
     root_dataset, test_dataset = load_dataset()
+    print(f"Root dataset size: {len(root_dataset)}")
+    print(f"Test dataset size: {len(test_dataset)}")
     
-    # Create a root dataloader
-    root_loader = torch.utils.data.DataLoader(
-        root_dataset,
-        batch_size=BATCH_SIZE,
-        shuffle=True,
-        num_workers=0,
-        pin_memory=False
-    )
+    # Step 3: Create data loaders
+    root_loader = torch.utils.data.DataLoader(root_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
     
-    # Set datasets on server
+    # Step 4: Create server and set datasets
+    print("\n--- Creating server and setting up model ---")
+    server = Server()
     server.set_datasets(root_loader, test_dataset)
-    print("Datasets set for server")
     
-    # Step 2: Pretrain global model
-    print("\n--- Pretraining global model ---")
+    # Pretrain global model
     server._pretrain_global_model()
     
-    # Step 3: Create client datasets
-    _, client_datasets = create_client_datasets(
+    # Get initial accuracy
+    initial_accuracy = server.evaluate_model()
+    results['initial_accuracy'] = initial_accuracy
+    print(f"Initial model accuracy: {initial_accuracy:.4f}")
+    
+    # Step 5: Create client datasets
+    print("\n--- Creating client datasets ---")
+    root_client_dataset, client_datasets = create_client_datasets(
         train_dataset=root_dataset,
         num_clients=NUM_CLIENTS,
         iid=not ENABLE_NON_IID,
         alpha=DIRICHLET_ALPHA if ENABLE_NON_IID else None
     )
     
-    # Create malicious client flags based on ratio
-    malicious_client_count = int(NUM_CLIENTS * FRACTION_MALICIOUS)
-    malicious_indices = random.sample(range(NUM_CLIENTS), malicious_client_count)
+    print(f"Created {len(client_datasets)} client datasets")
+    for i, dataset in enumerate(client_datasets):
+        print(f"Client {i}: {len(dataset)} samples")
     
-    print(f"\nCreating {NUM_CLIENTS} clients, {malicious_client_count} will be malicious")
+    # Step 6: Create clients
+    print("\n--- Creating clients ---")
+    clients = []
+    num_malicious = int(NUM_CLIENTS * FRACTION_MALICIOUS)
+    malicious_indices = np.random.choice(NUM_CLIENTS, num_malicious, replace=False)
+    
+    print(f"Creating {num_malicious} malicious clients out of {NUM_CLIENTS} total clients")
     print(f"Malicious client indices: {malicious_indices}")
     
-    # Step 4: Create clients
-    clients = []
-    for i, dataset in enumerate(client_datasets):
-        # Check if this client should be malicious
-        is_malicious = (i in malicious_indices)
+    for i in range(NUM_CLIENTS):
+        is_malicious = i in malicious_indices
         
-        # Create client
         client = Client(
             client_id=i,
-            dataset=dataset,
+            dataset=client_datasets[i], 
             is_malicious=is_malicious
         )
         
-        # Set attack type for malicious clients and verify it's set correctly
         if is_malicious:
-            attack_type = ATTACK_TYPE
-            print(f"Setting client {i} as malicious with attack type: {attack_type}")
             client.set_attack_parameters(
-                attack_type=attack_type,
+                attack_type=ATTACK_TYPE,
                 scaling_factor=SCALING_FACTOR,
                 partial_percent=PARTIAL_SCALING_PERCENT
             )
-            print(f"Verified client {i} - is_malicious flag: {client.is_malicious}")
-            print(f"Verified client {i} - has attack: {hasattr(client, 'attack')}")
-            if hasattr(client, 'attack'):
-                print(f"  Attack type: {client.attack.attack_type}")
-                print(f"  Scaling factor: {SCALING_FACTOR}")
-                print(f"  Affected percent: {PARTIAL_SCALING_PERCENT * 100:.1f}%")
+            print(f"Client {i}: MALICIOUS ({ATTACK_TYPE})")
+        else:
+            print(f"Client {i}: HONEST")
         
         clients.append(client)
     
-    # Set clients on server
     server.add_clients(clients)
     
-    # Print malicious client indices for debugging
-    print("\nClient configuration:")
-    for i, client in enumerate(clients):
-        status = "MALICIOUS" if client.is_malicious else "HONEST"
-        print(f"Client {i}: {status}")
-
-    # Print the server's client mappings
-    print("\nServer's client mappings:")
-    for i, client in enumerate(server.clients):
-        status = "MALICIOUS" if client.is_malicious else "HONEST"
-        print(f"Server client {i}: Client ID = {client.client_id}, Status = {status}")
-    
-    # Step 5: Collect root gradients (needed for VAE training)
-    print("\n--- Collecting root gradients ---")
-    root_gradients = server._collect_root_gradients()
-    
-    # Step 6: Train VAE on root gradients
+    # Step 7: Train VAE and dual attention
     print("\n--- Training VAE on root gradients ---")
+    
+    # Collect root gradients for VAE training
+    root_gradients = server._collect_root_gradients()
+    print(f"Collected {len(root_gradients)} root gradients")
+    
+    # Train VAE on root gradients
     server.vae = server.train_vae(root_gradients, vae_epochs=VAE_EPOCHS)
     
-    # Step 7: Train dual attention model for malicious client detection
-    print("\n--- Training dual attention model with diverse attack types ---")
+    # Train dual attention model with comprehensive attack simulation
+    print("\n--- Training dual attention model ---")
     
-    # Generate or load training data for dual attention
-    print("Generating training data for dual attention model...")
-    
-    # First, extract features from honest root gradients
+    # Extract features from honest root gradients  
     honest_features = []
-    for grad in root_gradients:
-        # Extract features from each gradient
-        features = server._compute_gradient_features(grad)
+    for grad in root_gradients[:min(20, len(root_gradients))]:  # Use up to 20 gradients
+        features = server._compute_gradient_features(grad, skip_client_sim=True)
         honest_features.append(features)
     
-    # Convert to tensor if not already
     if not isinstance(honest_features, torch.Tensor):
         honest_features = torch.stack(honest_features)
     
-    print(f"Generated {len(honest_features)} honest feature vectors from root gradients")
+    print(f"Extracted {len(honest_features)} honest feature vectors")
     
-    # Generate malicious gradients by applying ALL attack types to copies of root gradients
-    print("Generating malicious gradients using multiple attack types...")
+    # Generate malicious training data by applying ALL attack types
+    print("Generating malicious training data using comprehensive attack simulation...")
     
-    # List of all attack types to simulate
+    # Define all available attack types
     all_attack_types = [
-        'scaling_attack', 
+        'scaling_attack',
         'partial_scaling_attack', 
-        'sign_flipping_attack', 
-        'noise_attack', 
-        'min_max_attack', 
+        'sign_flipping_attack',
+        'noise_attack',
+        'min_max_attack',
         'min_sum_attack',
         'targeted_attack'
     ]
     
-    # Parameters for different attacks
-    attack_params = {
-        'scaling_attack': {'scaling_factor': 15.0},
-        'partial_scaling_attack': {'scaling_factor': 10.0, 'percent': 0.3},
-        'sign_flipping_attack': {'percent': 0.7},
-        'noise_attack': {'noise_factor': 3.0},
-        'min_max_attack': {'target_class': 0},
-        'min_sum_attack': {'target_weight': 0.9},
-        'targeted_attack': {'target_layer': -1, 'scaling_factor': 10.0}
-    }
-    
     malicious_features = []
     malicious_gradients = []
     
-    # Apply each attack type to each root gradient
+    # Apply each attack type to multiple root gradients
     for attack_type in all_attack_types:
         print(f"Applying {attack_type}...")
         
-        # Process a subset of root gradients (to avoid too many samples)
-        gradient_subset = random.sample(root_gradients, min(10, len(root_gradients)))
-        
-        for grad in gradient_subset:
-            # Create a copy of the gradient
-            grad_copy = grad.clone().to(server.device)
+        for i, grad in enumerate(root_gradients[:5]):  # Use first 5 gradients per attack
+            grad_copy = grad.clone()
             
-            # Apply the attack to the gradient copy
+            # Apply the specific attack based on type
             if attack_type == 'scaling_attack':
-                scaling_factor = attack_params['scaling_attack']['scaling_factor']
-                attacked_grad = grad_copy * scaling_factor
+                attacked_grad = grad_copy * SCALING_FACTOR
+                
             elif attack_type == 'partial_scaling_attack':
-                # Scale a percentage of the gradient
-                percent = attack_params['partial_scaling_attack']['percent']
-                scaling_factor = attack_params['partial_scaling_attack']['scaling_factor']
-                num_elements = int(grad_copy.numel() * percent)
-                indices = torch.randperm(grad_copy.numel())[:num_elements]
-                flat_grad = grad_copy.view(-1)
-                flat_grad[indices] *= scaling_factor
-                attacked_grad = flat_grad.view_as(grad_copy)
+                # Apply scaling to only a subset of parameters
+                mask = torch.rand_like(grad_copy) < PARTIAL_SCALING_PERCENT
+                attacked_grad = grad_copy.clone()
+                attacked_grad[mask] *= SCALING_FACTOR
+                
             elif attack_type == 'sign_flipping_attack':
-                # Flip signs of gradient elements
-                percent = attack_params['sign_flipping_attack']['percent']
-                num_elements = int(grad_copy.numel() * percent)
-                indices = torch.randperm(grad_copy.numel())[:num_elements]
-                flat_grad = grad_copy.view(-1)
-                flat_grad[indices] *= -1
-                attacked_grad = flat_grad.view_as(grad_copy)
+                attacked_grad = grad_copy * -1
+                
             elif attack_type == 'noise_attack':
-                # Add random noise
-                noise = torch.randn_like(grad_copy) * attack_params['noise_attack']['noise_factor'] * torch.norm(grad_copy)
+                noise = torch.randn_like(grad_copy) * 0.1
                 attacked_grad = grad_copy + noise
-            else:
-                # For other attack types, apply a simple scaling as fallback
+                
+            elif attack_type == 'min_max_attack':
+                # Set gradients to extreme values
+                attacked_grad = torch.where(grad_copy > 0, 
+                                          torch.ones_like(grad_copy) * 10.0,
+                                          torch.ones_like(grad_copy) * -10.0)
+                
+            elif attack_type == 'min_sum_attack':
+                # Minimize the sum of gradients
+                attacked_grad = grad_copy * 0.01
+                
+            elif attack_type == 'targeted_attack':
+                # Set all gradients to a target value that would benefit the attacker
                 attacked_grad = grad_copy * 5.0
             
             # Extract features from the attacked gradient
@@ -303,138 +276,124 @@ def main():
     try:
         test_errors, round_metrics = server.train(num_rounds=GLOBAL_EPOCHS)
         
-        # Step 9: Save and plot results
-        print("\n--- Saving and plotting results ---")
+        # Get final accuracy
+        final_accuracy = server.evaluate_model()
+        results['final_accuracy'] = final_accuracy
+        results['test_errors'] = test_errors
+        results['round_metrics'] = round_metrics
         
-        # Save round metrics
-        import json
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        os.makedirs("logs", exist_ok=True)
-        with open(f"logs/round_metrics_{timestamp}.json", "w") as f:
-            json.dump(round_metrics, f, indent=2)
+        # Step 9: Calculate detection metrics
+        print("\n--- Calculating detection metrics ---")
         
-        # Plot training progress
-        plt.figure(figsize=(10, 6))
-        plt.plot(range(len(test_errors)), test_errors, marker='o')
-        plt.title("Federated Learning Training Progress")
-        plt.xlabel("Communication Round")
-        plt.ylabel("Test Error")
-        plt.grid(True)
-        plt.savefig(f"training_progress_{timestamp}.png")
-        plt.close()
-        
-        # Plot trust scores and weights (if available)
-        if hasattr(server, 'trust_scores') and server.trust_scores is not None:
-            plt.figure(figsize=(10, 6))
-            trust_scores = server.trust_scores.cpu().numpy()
-            client_indices = list(range(len(trust_scores)))
-            
-            # Mark malicious clients with different colors
-            honest_indices = [i for i, client in enumerate(server.clients) if not client.is_malicious]
-            malicious_indices = [i for i, client in enumerate(server.clients) if client.is_malicious]
-            
-            # Plot honest clients
-            if honest_indices:
-                plt.bar([str(i) for i in honest_indices], 
-                       trust_scores[honest_indices], 
-                       color='blue', 
-                       label='Honest Clients')
-            
-            # Plot malicious clients if any exist
-            if malicious_indices:
-                plt.bar([str(i) for i in malicious_indices], 
-                       trust_scores[malicious_indices], 
-                       color='red', 
-                       label='Malicious Clients')
-            
-            plt.xlabel('Client ID')
-            plt.ylabel('Trust Score')
-            plt.title('Trust Scores by Client')
-            plt.legend()
-            plt.savefig('trust_scores.png')
-            
-            # Plot weights
-            if hasattr(server, 'aggregation_weights') and server.aggregation_weights is not None:
-                plt.figure(figsize=(10, 6))
-                weights = server.aggregation_weights.cpu().numpy()
-                
-                # Plot honest clients
-                if honest_indices:
-                    plt.bar([str(i) for i in honest_indices], 
-                           weights[honest_indices], 
-                           color='blue', 
-                           label='Honest Clients')
-                
-                # Plot malicious clients if any exist
-                if malicious_indices:
-                    plt.bar([str(i) for i in malicious_indices], 
-                           weights[malicious_indices], 
-                           color='red', 
-                           label='Malicious Clients')
-                
-                plt.xlabel('Client ID')
-                plt.ylabel('Aggregation Weight')
-                plt.title('Aggregation Weights by Client')
-                plt.legend()
-                plt.savefig('aggregation_weights.png')
-        
-        print("\n--- Federated learning completed successfully ---")
-        
-        # Print summary statistics to verify malicious client detection
-        print("\n====== DETECTION SUMMARY ======")
-        detected_malicious = []
-        
-        # Get final round metrics - fix for KeyError
+        # Get final round metrics
         final_round = max([int(k) for k in round_metrics.keys() if isinstance(k, str)] + [k for k in round_metrics.keys() if isinstance(k, int)])
-        # Access final_metrics with integer key
         final_metrics = round_metrics[final_round]
         
-        # Check which clients were detected as malicious in the final round
-        for client_idx, client in enumerate(server.clients):
-            is_actually_malicious = client.is_malicious
-            
-            # Check if client was detected as malicious (significantly lower weight)
-            weight = final_metrics['weights'].get(client_idx, None)
-            trust_score = final_metrics['trust_scores'].get(client_idx, None)
-            
-            # If client participated in the final round
-            if weight is not None:
-                avg_weight = 1.0 / len(server.clients)
-                is_detected_malicious = weight < avg_weight * 0.7  # Threshold for detection
-                
-                status = "✓ CORRECTLY " if is_detected_malicious == is_actually_malicious else "✗ INCORRECTLY "
-                actual = "MALICIOUS" if is_actually_malicious else "HONEST"
-                detected = "MALICIOUS" if is_detected_malicious else "HONEST"
-                
-                print(f"Client {client_idx}: {status} identified as {detected} (Actually {actual})")
-                print(f"  Weight: {weight:.4f}, Trust score: {trust_score:.4f}")
-                
-                if is_detected_malicious:
-                    detected_malicious.append(client_idx)
-        
-        # Calculate detection accuracy
+        # Define client lists for consistent access
         true_malicious = [i for i, client in enumerate(server.clients) if client.is_malicious]
-        true_benign = [i for i, client in enumerate(server.clients) if not client.is_malicious]
+        true_honest = [i for i, client in enumerate(server.clients) if not client.is_malicious]
         
-        true_positives = len([i for i in detected_malicious if i in true_malicious])
-        false_positives = len([i for i in detected_malicious if i not in true_malicious])
+        # Use the actual detection results from the server
+        detection_results = final_metrics.get('detection_results', {})
         
-        if len(true_malicious) > 0:
-            recall = true_positives / len(true_malicious)
-        else:
-            recall = 1.0  # No malicious clients to detect
+        if detection_results:
+            # Use the computed detection results from the server
+            true_positives = detection_results['true_positives']
+            false_positives = detection_results['false_positives']
+            false_negatives = detection_results['false_negatives']
+            true_negatives = detection_results['true_negatives']
             
-        precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 1.0
+            # Calculate metrics
+            precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 1.0
+            recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 1.0
+            f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+            accuracy = (true_positives + true_negatives) / len(server.clients)
+            
+        else:
+            # Fallback to weight-based detection (less accurate)
+            detected_malicious = []
+            
+            # Calculate average weights and trust scores
+            avg_weight = 1.0 / len(server.clients)
+            detection_threshold = avg_weight * 0.7
+            
+            for client_idx, client in enumerate(server.clients):
+                weight = final_metrics['weights'].get(client_idx, avg_weight)
+                
+                if weight < detection_threshold:
+                    detected_malicious.append(client_idx)
+            
+            # Calculate metrics
+            true_positives = len([i for i in detected_malicious if i in true_malicious])
+            false_positives = len([i for i in detected_malicious if i not in true_malicious])
+            false_negatives = len([i for i in true_malicious if i not in detected_malicious])
+            true_negatives = len([i for i in true_honest if i not in detected_malicious])
+            
+            precision = true_positives / (true_positives + false_positives) if (true_positives + false_positives) > 0 else 1.0
+            recall = true_positives / (true_positives + false_negatives) if (true_positives + false_negatives) > 0 else 1.0
+            f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+            accuracy = (true_positives + true_negatives) / len(server.clients)
         
-        print(f"\nDetection Results:")
-        print(f"  True positives: {true_positives}/{len(true_malicious)} malicious clients detected")
-        print(f"  False positives: {false_positives}/{len(true_benign)} honest clients misclassified")
-        print(f"  Precision: {precision:.2f}, Recall: {recall:.2f}")
+        # Calculate trust score averages
+        total_trust_honest = 0
+        total_trust_malicious = 0
+        count_honest = 0
+        count_malicious = 0
+        
+        for client_idx, client in enumerate(server.clients):
+            trust_score = final_metrics['trust_scores'].get(client_idx, 0.5)
+            
+            if client.is_malicious:
+                total_trust_malicious += trust_score
+                count_malicious += 1
+            else:
+                total_trust_honest += trust_score
+                count_honest += 1
+        
+        avg_trust_honest = total_trust_honest / count_honest if count_honest > 0 else 0.0
+        avg_trust_malicious = total_trust_malicious / count_malicious if count_malicious > 0 else 0.0
+        
+        detection_metrics = {
+            'precision': precision,
+            'recall': recall,
+            'f1_score': f1_score,
+            'accuracy': accuracy,
+            'true_positives': true_positives,
+            'false_positives': false_positives,
+            'false_negatives': false_negatives,
+            'true_negatives': true_negatives,
+            'malicious_detection_rate': recall,
+            'false_positive_rate': false_positives / len(true_honest) if len(true_honest) > 0 else 0.0,
+            'avg_trust_honest': avg_trust_honest,
+            'avg_trust_malicious': avg_trust_malicious
+        }
+        
+        results['detection_metrics'] = detection_metrics
+        
+        # Step 10: Save results (moved to experiment runner)
+        
+        print("\n--- Federated learning completed successfully ---")
+        results['status'] = 'completed'
+        
+        # Print summary
+        print("\n====== EXPERIMENT SUMMARY ======")
+        print(f"Initial Accuracy: {initial_accuracy:.4f}")
+        print(f"Final Accuracy: {final_accuracy:.4f}")
+        print(f"Improvement: {final_accuracy - initial_accuracy:.4f}")
+        print(f"Detection Precision: {precision:.4f}")
+        print(f"Detection Recall: {recall:.4f}")
+        print(f"Detection F1-Score: {f1_score:.4f}")
+        print(f"Trust Score - Honest Avg: {avg_trust_honest:.4f}")
+        print(f"Trust Score - Malicious Avg: {avg_trust_malicious:.4f}")
         
     except Exception as e:
         print(f"\n!!! Error during federated learning: {str(e)}")
+        results['status'] = 'failed'
+        results['error'] = str(e)
         import traceback
         traceback.print_exc()
+    
+    return results
 
 if __name__ == "__main__":
     main() 

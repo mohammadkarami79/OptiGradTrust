@@ -625,7 +625,10 @@ class Server:
                 'weights': {},
                 'features': {},
                 'raw_metrics': {},
-                'client_status': {}
+                'client_status': {},
+                'detected_malicious': [],
+                'actual_malicious': [],
+                'detection_results': {}
             }
             
             # Select clients for this round
@@ -812,19 +815,26 @@ class Server:
                         trust_scores_tensor, confidence_scores = self.dual_attention(features_tensor, global_context)
                     
                     # Convert to list for easier handling
-                    client_trust_scores = trust_scores_tensor.cpu().numpy().tolist()
+                    client_malicious_scores = trust_scores_tensor.cpu().numpy().tolist()
                     
-                    # Print trust scores
+                    # FIXED: Convert malicious scores to trust scores for proper interpretation
+                    client_trust_scores = [1.0 - score for score in client_malicious_scores]
+                    
+                    # Print trust scores (showing both malicious and trust scores for clarity)
                     print("\nClient Trust Scores:")
                     for i, client_idx in enumerate(client_indices):
                         client = self.clients[client_idx]
                         is_malicious = "YES" if client.is_malicious else "NO"
+                        malicious_score = client_malicious_scores[i]
                         trust_score = client_trust_scores[i]
                         round_metrics[round_idx]['trust_scores'][client_idx] = trust_score
-                        print(f"Client {client_idx} (Malicious: {is_malicious}): Trust Score = {trust_score:.4f}")
+                        round_metrics[round_idx]['malicious_scores'] = round_metrics[round_idx].get('malicious_scores', {})
+                        round_metrics[round_idx]['malicious_scores'][client_idx] = malicious_score
+                        print(f"Client {client_idx} (Malicious: {is_malicious}): Trust Score = {trust_score:.4f} (Malicious Score = {malicious_score:.4f})")
                     
-                    # Store trust scores for later use
-                    self.trust_scores = trust_scores_tensor
+                    # Store both scores for later use  
+                    self.trust_scores = torch.tensor(client_trust_scores, device=self.device)
+                    self.malicious_scores = trust_scores_tensor  # Keep original malicious scores
                     self.confidence_scores = confidence_scores
                     
                 except Exception as e:
@@ -856,7 +866,7 @@ class Server:
                         
                     weights_tensor, malicious_indices = self.dual_attention.get_gradient_weights(
                         features_tensor, 
-                        self.trust_scores,
+                        self.malicious_scores,
                         self.confidence_scores
                     )
                     
@@ -890,6 +900,18 @@ class Server:
                             print(f"False positives: {false_positives}")
                         if false_negatives:
                             print(f"False negatives (undetected malicious): {false_negatives}")
+                    
+                    # Store detection results for metrics calculation
+                    round_metrics[round_idx]['detected_malicious'] = detected_malicious_clients
+                    round_metrics[round_idx]['actual_malicious'] = [idx for idx in client_indices if self.clients[idx].is_malicious]
+                    round_metrics[round_idx]['detection_results'] = {
+                        'detected': detected_malicious_clients,
+                        'actually_malicious': [idx for idx in client_indices if self.clients[idx].is_malicious],
+                        'true_positives': len([idx for idx in detected_malicious_clients if self.clients[idx].is_malicious]),
+                        'false_positives': len([idx for idx in detected_malicious_clients if not self.clients[idx].is_malicious]),
+                        'false_negatives': len([idx for idx in client_indices if self.clients[idx].is_malicious and idx not in detected_malicious_clients]),
+                        'true_negatives': len([idx for idx in client_indices if not self.clients[idx].is_malicious and idx not in detected_malicious_clients])
+                    }
 
                 except Exception as e:
                     print(f"Error computing weights with dual attention: {str(e)}")
@@ -897,7 +919,8 @@ class Server:
                     traceback.print_exc()
 
                     # Fallback to direct trust score weighting
-                    weights = [max(0.01, score) for score in client_trust_scores]
+                    # FIXED: Convert malicious scores to trust scores (1 - malicious_score)
+                    weights = [max(0.01, 1.0 - score) for score in client_trust_scores]
                     total_weight = sum(weights)
                     if total_weight > 0:
                         weights = [w / total_weight for w in weights]
@@ -905,7 +928,8 @@ class Server:
                         weights = [1.0 / len(client_trust_scores)] * len(client_trust_scores)
             else:
                 # Direct trust score weighting
-                weights = [max(0.01, score) for score in client_trust_scores]
+                # FIXED: Convert malicious scores to trust scores (1 - malicious_score)
+                weights = [max(0.01, 1.0 - score) for score in client_trust_scores]
                 total_weight = sum(weights)
                 if total_weight > 0:
                     weights = [w / total_weight for w in weights]
@@ -1621,3 +1645,70 @@ class Server:
         
         print(f"Added {len(client_list)} clients to server")
         print(f"Malicious clients: {len(self.malicious_clients)}")
+
+    def _get_vae_reconstruction_error(self, gradient):
+        """
+        Get VAE reconstruction error for a gradient.
+        
+        Args:
+            gradient: Gradient tensor to compute reconstruction error for
+            
+        Returns:
+            float: Reconstruction error
+        """
+        if self.vae is None:
+            return 0.0
+            
+        with torch.no_grad():
+            # Move gradient to VAE device
+            vae_device = next(self.vae.parameters()).device
+            gradient = gradient.to(vae_device)
+            
+            # Compute reconstruction error
+            # VAE forward returns (reconstruction, mu, log_var)
+            vae_output = self.vae(gradient.unsqueeze(0))
+            
+            # Handle different possible return formats
+            if isinstance(vae_output, tuple):
+                reconstructed = vae_output[0]  # Get reconstruction from tuple
+            else:
+                reconstructed = vae_output  # Direct reconstruction
+                
+            error = F.mse_loss(reconstructed, gradient.unsqueeze(0))
+            
+            return error.item()
+    
+    def evaluate_model(self):
+        """
+        Evaluate the global model on the test dataset.
+        
+        Returns:
+            float: Accuracy on test dataset
+        """
+        if not hasattr(self, 'test_dataset') or self.test_dataset is None:
+            print("Warning: No test dataset available for evaluation")
+            return 0.0
+            
+        # Create test dataloader
+        test_loader = DataLoader(
+            self.test_dataset,
+            batch_size=BATCH_SIZE,
+            shuffle=False,
+            num_workers=0
+        )
+        
+        # Evaluate model
+        self.global_model.eval()
+        correct = 0
+        total = 0
+        
+        with torch.no_grad():
+            for data, target in test_loader:
+                data, target = data.to(self.device), target.to(self.device)
+                outputs = self.global_model(data)
+                _, predicted = torch.max(outputs.data, 1)
+                total += target.size(0)
+                correct += (predicted == target).sum().item()
+        
+        accuracy = correct / total if total > 0 else 0.0
+        return accuracy

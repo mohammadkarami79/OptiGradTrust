@@ -350,23 +350,61 @@ class DualAttention(nn.Module):
             
             # SPECIAL DETECTION FOR ZERO/VERY LOW GRADIENT ATTACKS
             # Check for abnormally low gradient norms (zero attacks)
-            zero_threshold = 0.1  # Very low threshold for zero detection
+            # FIXED: Make this detection more intelligent to avoid false positives
+            
+            # Calculate statistics for low norm detection
+            norm_mean = np.mean(norm_features)
+            norm_std = np.std(norm_features)
+            
+            # Adaptive threshold based on the distribution of norms
+            # Use a more conservative approach: only flag if significantly below the distribution
+            low_norm_threshold = max(0.05, norm_mean - 2.0 * norm_std)  # At least 2 std below mean
+            
+            # Additional criteria: must be very different from other clients
+            very_low_threshold = 0.03  # Extremely low absolute threshold
+            
             low_norm_indices = []
             
-            # Only consider it suspicious if there are also normal gradients present
-            normal_gradients_exist = any(norm > zero_threshold * 2 for norm in norm_features)
-            
-            if normal_gradients_exist:
-                for i, norm in enumerate(norm_features):
-                    if norm < zero_threshold:
-                        low_norm_indices.append(i)
-                        print(f"Detected client {i} as suspicious due to very low gradient norm (zero attack): {norm:.4f} (threshold: {zero_threshold:.4f})")
-                        
-                        # Also check sign consistency - zero gradients often have zero consistency
-                        if features.shape[1] > 4:  # Ensure we have sign consistency feature
-                            sign_consistency = features[i, 4].item()
-                            if sign_consistency < 0.1:
-                                print(f"  Client {i} also has very low sign consistency: {sign_consistency:.4f} (confirms zero attack)")
+            # Only flag as suspicious if multiple criteria are met
+            for i, norm in enumerate(norm_features):
+                is_suspicious = False
+                reasons = []
+                
+                # Check if gradient norm is extremely low (absolute threshold)
+                if norm < very_low_threshold:
+                    is_suspicious = True
+                    reasons.append(f"extremely low norm ({norm:.4f} < {very_low_threshold:.4f})")
+                
+                # Check if it's significantly below the distribution AND other clients have normal norms
+                elif norm < low_norm_threshold and len(norm_features) > 1:
+                    # Only suspicious if there's significant variation in norms
+                    max_norm = np.max(norm_features)
+                    if max_norm > 2.0 * norm:  # Other clients have much higher norms
+                        is_suspicious = True
+                        reasons.append(f"significantly below distribution ({norm:.4f} < {low_norm_threshold:.4f})")
+                
+                # Additional check: if malicious score is also high, it's more likely to be an attack
+                if len(reasons) > 0 and malicious_scores is not None:
+                    client_malicious_score = malicious_scores[i].item()
+                    if client_malicious_score > 0.7:  # High malicious score
+                        is_suspicious = True
+                        reasons.append(f"high malicious score ({client_malicious_score:.4f})")
+                    elif client_malicious_score < 0.4:  # Low malicious score suggests honest client
+                        is_suspicious = False  # Override - likely honest with naturally low gradient
+                        reasons = [f"low malicious score ({client_malicious_score:.4f}) suggests honest client"]
+                
+                if is_suspicious and len([r for r in reasons if "low malicious score" not in r]) > 0:
+                    low_norm_indices.append(i)
+                    print(f"Detected client {i} as suspicious due to potential zero attack: {', '.join(reasons)}")
+                    
+                    # Also check sign consistency for additional confirmation
+                    if features.shape[1] > 4:  # Ensure we have sign consistency feature
+                        sign_consistency = features[i, 4].item()
+                        if sign_consistency < 0.1:
+                            print(f"  Client {i} also has very low sign consistency: {sign_consistency:.4f} (confirms attack)")
+                elif not is_suspicious and norm < 0.1:
+                    # Log why we're NOT flagging this client
+                    print(f"Client {i} has low gradient norm ({norm:.4f}) but not flagged as suspicious: {', '.join(reasons)}")
             
             # Combine malicious indices from all methods
             malicious_indices = list(set(malicious_indices + high_norm_indices + low_norm_indices))
@@ -435,23 +473,48 @@ class DualAttention(nn.Module):
             weights = F.softmax(weights / temperature, dim=0)
             
         else:
-            # Use threshold-based weighting
-            threshold = 0.5
-            malicious_mask = malicious_scores > threshold
+            # Use adaptive threshold-based weighting instead of fixed 0.5
+            # Calculate adaptive threshold based on score distribution
+            scores_np = malicious_scores.detach().cpu().numpy()
+            
+            # Use percentile-based threshold for better detection
+            # This adapts to the actual score distribution
+            score_mean = np.mean(scores_np)
+            score_std = np.std(scores_np)
+            
+            # Adaptive threshold: mean + 0.5 * std, but bounded between 0.4 and 0.8
+            adaptive_threshold = np.clip(score_mean + 0.5 * score_std, 0.4, 0.8)
+            
+            print(f"\nAdaptive Detection Threshold: {adaptive_threshold:.4f}")
+            print(f"Score distribution - Mean: {score_mean:.4f}, Std: {score_std:.4f}")
+            
+            malicious_mask = malicious_scores > adaptive_threshold
             malicious_indices = torch.nonzero(malicious_mask).flatten().tolist()
             
-            # Create weights
-            weights = torch.zeros_like(malicious_scores)
-            weights[~malicious_mask] = 1.0 - malicious_scores[~malicious_mask]  # Honest clients get higher weights
+            # Create weights based on trust scores (1 - malicious_scores)
+            trust_scores = 1.0 - malicious_scores
+            weights = trust_scores.clone()
             
-            # Apply strong penalty to malicious clients based on MALICIOUS_PENALTY_FACTOR
-            # Higher penalty factor means lower weights for malicious clients
-            malicious_weight = 0.01 * (1 - MALICIOUS_PENALTY_FACTOR)  # Minimum weight decreases as penalty increases
-            weights[malicious_mask] = malicious_weight
+            # Apply stronger penalty to detected malicious clients
+            if MALICIOUS_PENALTY_FACTOR > 0 and len(malicious_indices) > 0:
+                for idx in malicious_indices:
+                    # Apply penalty based on how far above threshold the score is
+                    excess = malicious_scores[idx] - adaptive_threshold
+                    penalty_strength = min(0.9, MALICIOUS_PENALTY_FACTOR * (1.0 + excess.item()))
+                    
+                    old_weight = weights[idx].item()
+                    weights[idx] = weights[idx] * (1 - penalty_strength)
+                    
+                    print(f"Applied penalty of {penalty_strength:.4f} to client {idx} (malicious score: {malicious_scores[idx].item():.4f})")
+                    print(f"  Weight reduced from {old_weight:.4f} to {weights[idx].item():.4f}")
+            
+            # Ensure minimum weight
+            min_weight = 0.01
+            weights = torch.clamp(weights, min=min_weight)
             
             # Normalize weights to sum to 1
             weights = weights / weights.sum() if weights.sum() > 0 else torch.ones_like(weights) / num_clients
-            
+        
         # Print detection summary
         print(f"Detected {len(malicious_indices)} potential malicious clients")
         if malicious_indices:
