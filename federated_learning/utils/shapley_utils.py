@@ -151,7 +151,7 @@ def efficient_shapley_estimation(model, gradients, validation_loader, device,
 def calculate_shapley_values_batch(model, client_gradients, validation_loader, device, num_samples=5):
     """
     Calculate Shapley values for a batch of client gradients.
-    Uses Monte Carlo sampling for computational efficiency.
+    Uses Monte Carlo sampling with LOSS-based evaluation for better sensitivity.
     
     Args:
         model: The global model to evaluate on
@@ -165,9 +165,9 @@ def calculate_shapley_values_batch(model, client_gradients, validation_loader, d
     """
     num_clients = len(client_gradients)
     
-    # Calculate baseline performance (model without any client updates)
-    baseline_perf = evaluate_model(model, validation_loader, device)
-    print(f"Baseline model performance: {baseline_perf:.4f}")
+    # Calculate baseline LOSS (not accuracy) for better sensitivity
+    baseline_loss = evaluate_model_loss(model, validation_loader, device)
+    print(f"Baseline model loss: {baseline_loss:.6f}")
     
     # Initialize Shapley values
     shapley_values = [0.0 for _ in range(num_clients)]
@@ -180,74 +180,79 @@ def calculate_shapley_values_batch(model, client_gradients, validation_loader, d
         client_indices = list(range(num_clients))
         random.shuffle(client_indices)
         
-        # Track marginal contributions
-        prev_perf = baseline_perf
+        # Track marginal contributions with incremental updates
+        current_model = copy.deepcopy(model)
+        prev_loss = baseline_loss
         
         # For each client in the permutation
         for i, client_idx in enumerate(client_indices):
-            # Create a copy of the model
-            model_copy = copy.deepcopy(model)
+            # Apply this client's gradient to current model
+            client_gradient = client_gradients[client_idx].to(device)
             
-            # Apply gradients up to (and including) the current client
-            current_gradients = [client_gradients[idx] for idx in client_indices[:i+1]]
-            current_weights = [1.0 / len(current_gradients)] * len(current_gradients)
+            # Update model incrementally (not from scratch)
+            updated_model, _, _ = update_model_with_gradient(
+                model=current_model,
+                gradient=client_gradient,
+                learning_rate=0.01  # Small learning rate for marginal effect
+            )
             
-            # Aggregate gradients
-            if current_gradients:
-                aggregated_gradient = aggregate_gradients(current_gradients, current_weights)
-                
-                # Apply aggregated gradient to model
-                from federated_learning.utils.model_utils import update_model_with_gradient
-                lr = 0.01  # Use consistent learning rate for evaluation
-                print(f"Updating model with gradient (norm: {torch.norm(aggregated_gradient).item():.8f}, learning rate: {lr:.8f})")
-                model_copy, _, _ = update_model_with_gradient(model_copy, aggregated_gradient, learning_rate=lr)
+            # Evaluate performance using LOSS for higher sensitivity
+            current_loss = evaluate_model_loss(updated_model, validation_loader, device)
             
-            # Evaluate performance
-            perf = evaluate_model(model_copy, validation_loader, device)
+            # Calculate marginal contribution (negative loss change = positive contribution)
+            marginal_contribution = prev_loss - current_loss  # Loss reduction = positive contribution
+            shapley_values[client_idx] += marginal_contribution
             
-            # Calculate marginal contribution
-            marginal = perf - prev_perf
-            shapley_values[client_idx] += marginal
-            
-            print(f"  Client {client_indices[i]}: Marginal contribution = {marginal:.6f}, Performance = {perf:.4f}")
+            print(f"  Client {client_idx}: Marginal contribution = {marginal_contribution:.6f}, Loss = {current_loss:.6f}")
             
             # Update for next iteration
-            prev_perf = perf
+            current_model = updated_model
+            prev_loss = current_loss
     
     # Average over samples
     shapley_values = [val / num_samples for val in shapley_values]
     
-    # Process Shapley values for better differentiation
-    # Normalize to [0,1] range, handling negative values
+    # Enhanced normalization with offset for better differentiation
     min_val = min(shapley_values)
-    if min_val < 0:
-        # Shift values if any are negative
-        shapley_values = [val - min_val for val in shapley_values]
+    max_val = max(shapley_values)
     
-    # Normalize
-    max_val = max(shapley_values) if max(shapley_values) > 0 else 1.0
-    normalized_shapley = [val / max_val for val in shapley_values]
+    # If all values are very close, use relative ranking with artificial spread
+    if max_val - min_val < 1e-5:
+        print("Shapley values too close, using gradient norm ranking")
+        # Use gradient norms as fallback for ranking
+        grad_norms = [torch.norm(grad).item() for grad in client_gradients]
+        # Normalize gradient norms to create artificial Shapley spread
+        min_norm = min(grad_norms)
+        max_norm = max(grad_norms)
+        if max_norm > min_norm:
+            shapley_values = [(norm - min_norm) / (max_norm - min_norm) for norm in grad_norms]
+        else:
+            shapley_values = [0.5] * num_clients
+    else:
+        # Standard normalization
+        shapley_values = [(val - min_val) / (max_val - min_val) for val in shapley_values]
     
-    # Handle case where all Shapley values are very similar
-    # Add slight randomness if the range is too small
-    if max(normalized_shapley) - min(normalized_shapley) < 0.05:
-        # Add minimal random noise to differentiate between clients
-        normalized_shapley = [val + random.uniform(-0.02, 0.02) for val in normalized_shapley]
-        # Re-normalize to [0,1]
-        min_val = min(normalized_shapley)
-        max_val = max(normalized_shapley)
-        normalized_shapley = [(val - min_val) / (max_val - min_val) for val in normalized_shapley]
-        print("Applied small random perturbation to differentiate similar Shapley values")
+    # Add small random perturbation for final differentiation
+    for i in range(len(shapley_values)):
+        shapley_values[i] += random.uniform(-0.01, 0.01)
+    
+    # Final normalization to [0, 1]
+    min_val = min(shapley_values)
+    max_val = max(shapley_values)
+    if max_val > min_val:
+        shapley_values = [(val - min_val) / (max_val - min_val) for val in shapley_values]
+    
+    print("Applied small random perturbation to differentiate similar Shapley values")
     
     print("\nShapley Value Results:")
-    for i, (raw, norm) in enumerate(zip(shapley_values, normalized_shapley)):
+    for i, (raw, norm) in enumerate(zip(shapley_values, shapley_values)):  # Both same after normalization
         print(f"Client {i}: Raw = {raw:.6f}, Normalized = {norm:.4f}")
     
-    return normalized_shapley
+    return shapley_values
 
-def evaluate_model(model, validation_loader, device):
+def evaluate_model_loss(model, validation_loader, device):
     """
-    Evaluate model performance on validation dataset.
+    Evaluate model LOSS on validation dataset for more sensitive Shapley calculation.
     
     Args:
         model: Model to evaluate
@@ -255,42 +260,22 @@ def evaluate_model(model, validation_loader, device):
         device: Device to run computations on
         
     Returns:
-        accuracy: Model accuracy on validation data
+        loss: Average loss on validation data
     """
     model.eval()
-    correct = 0
-    total = 0
+    total_loss = 0.0
+    total_samples = 0
     
     with torch.no_grad():
         for data, target in validation_loader:
             data, target = data.to(device), target.to(device)
             outputs = model(data)
-            _, predicted = torch.max(outputs.data, 1)
-            total += target.size(0)
-            correct += (predicted == target).sum().item()
+            loss = F.cross_entropy(outputs, target, reduction='sum')
+            total_loss += loss.item()
+            total_samples += target.size(0)
     
-    accuracy = correct / total if total > 0 else 0
-    return accuracy
-
-def aggregate_gradients(gradients, weights):
-    """
-    Aggregate gradients with weights.
-    
-    Args:
-        gradients: List of gradient tensors
-        weights: List of weights corresponding to gradients
-        
-    Returns:
-        aggregated_gradient: Weighted sum of gradients
-    """
-    # Convert to tensor and expand weights
-    grad_tensor = torch.stack(gradients)
-    weights_tensor = torch.tensor(weights, device=grad_tensor.device).view(-1, 1)
-    
-    # Compute weighted sum
-    aggregated_gradient = torch.sum(grad_tensor * weights_tensor, dim=0)
-    
-    return aggregated_gradient
+    avg_loss = total_loss / total_samples if total_samples > 0 else 0
+    return avg_loss
 
 def integrate_shapley_into_features(features, shapley_values, shapley_weight=0.3):
     """

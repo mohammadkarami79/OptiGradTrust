@@ -145,6 +145,24 @@ class Attack:
             modified_grad = modified_grad * (1 - mask) + backdoor_pattern * mask
             attack_name = "Backdoor attack (subtle pattern injection)"
             
+        elif self.attack_type == 'label_flipping':
+            # For label flipping, gradient is already poisoned during data/label modification
+            # Return original gradient since the poisoning happens at data level
+            modified_grad = gradient.clone()
+            attack_name = "Label flipping attack (applied during training)"
+            
+        elif self.attack_type == 'min_sum_attack':
+            # Minimize sum of targeted gradient components
+            modified_grad = gradient.clone()
+            
+            # Target 20% of largest gradient components and invert them
+            num_elements = gradient.numel()
+            values, indices = torch.topk(torch.abs(gradient.view(-1)), k=int(0.2 * num_elements))
+            
+            # Invert and amplify
+            modified_grad.view(-1)[indices] *= -2.0
+            attack_name = "Min-Sum attack (invert 20% largest components)"
+            
         else:
             # Default: no attack
             print(f"Unknown attack type: {self.attack_type}. Using original gradient.")

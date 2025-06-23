@@ -60,26 +60,26 @@ ENABLE_PARALLEL_PROCESSING = False    # Keep parallel processing disabled
 # FEDERATED LEARNING PARAMETERS
 # ======================================
 
-# Global parameters
-NUM_CLIENTS = 5                    # Increased from 3 to 5 for better testing
-FRACTION_MALICIOUS = 0.4           # Increased from 0.2 to 0.4 (40% malicious clients)
+# Global parameters - Conference optimized
+NUM_CLIENTS = 10                   # Standard number for good statistics
+FRACTION_MALICIOUS = 0.3           # 30% malicious clients (3 out of 10)
 NUM_MALICIOUS = int(NUM_CLIENTS * FRACTION_MALICIOUS)
-BATCH_SIZE = 64                    # Batch size
+BATCH_SIZE = 128                   # Standard batch size for MNIST
 LR = 0.01                          # Learning rate
-LOCAL_EPOCHS_ROOT = 1              # Number of local epochs for root
-LOCAL_EPOCHS_CLIENT = 2            # Increased from 1 to 2 for more significant updates
-GLOBAL_EPOCHS = 5                  # Increased from 2 to 5 to show more improvement over rounds
-CLIENT_SELECTION_RATIO = 1.0       # Fraction of clients to select each round
-CLIENT_FRACTION = 1.0              # Fraction of clients to use in each round (selection pool)
-LEARNING_RATE = LR                 # Alias for LR used in some methods
-MOMENTUM = 0.9                     # Momentum for SGD
-WEIGHT_DECAY = 5e-4                # Weight decay for regularization
+LOCAL_EPOCHS_ROOT = 20             # Root model training epochs (as requested)
+LOCAL_EPOCHS_CLIENT = 5            # Client local epochs (as requested)
+GLOBAL_EPOCHS = 15                 # Global federated rounds (as requested)
+CLIENT_SELECTION_RATIO = 1.0       # Select all clients
+CLIENT_FRACTION = 1.0              # Use all clients
+LEARNING_RATE = LR                 
+MOMENTUM = 0.9                     # Standard momentum
+WEIGHT_DECAY = 1e-4                # Standard weight decay
 CLIENT_EPOCHS = LOCAL_EPOCHS_CLIENT
 
-# Learning rate scheduling
-LR_DECAY = 0.98                    # Learning rate decay factor
-LR_DECAY_EPOCHS = 1                # Apply decay every N epochs
-MIN_LR = 0.001                     # Minimum learning rate
+# Learning rate scheduling - Optimized for long training
+LR_DECAY = 0.995                   # More conservative decay for longer training
+LR_DECAY_EPOCHS = 2                # Apply decay every 2 epochs
+MIN_LR = 0.0001                    # Minimum learning rate
 
 # Data loading configuration
 NUM_WORKERS = 4                    # Disable worker threads for data loading
@@ -89,11 +89,11 @@ PIN_MEMORY = True                 # Disable pin memory to save GPU memory
 # MODEL AND DATASET CONFIGURATION
 # ======================================
 
-# Dataset selection
-DATASET = 'MNIST'                  # Options: 'MNIST', 'ALZHEIMER', 'CIFAR10'
-
-# Model selection
-MODEL = 'CNN'                      # Options: 'CNN', 'RESNET18', 'RESNET50'
+# Dataset and model configuration - Final conference settings
+DATASET = 'MNIST'                  # Using MNIST for reliable results
+MODEL = 'CNN'                      # CNN model for MNIST
+INPUT_CHANNELS = 1                 # MNIST has 1 channel (grayscale)
+NUM_CLASSES = 10                   # MNIST has 10 classes (0-9)
 
 # ResNet configuration
 RESNET50_UNFREEZE_LAYERS = 20      # Number of layers to unfreeze from the end for ResNet50
@@ -114,32 +114,34 @@ ALZHEIMER_CLASSES = 4             # Number of classes
 CIFAR_IMG_SIZE = 32               # CIFAR-10 images are 32x32
 CIFAR_CLASSES = 10                # 10 classes in CIFAR-10
 
-# VAE training configuration
-VAE_EPOCHS = 5                  # Number of epochs for VAE training
-VAE_BATCH_SIZE = 32              # Batch size for VAE training
-VAE_LEARNING_RATE = 0.001        # Learning rate for VAE training
-VAE_PROJECTION_DIM = 128         # Much smaller projection dimension
-VAE_HIDDEN_DIM = 64              # Hidden dimension for VAE
-VAE_LATENT_DIM = 32              # Latent dimension for VAE
-GRADIENT_DIMENSION = None        # Placeholder: Will be determined dynamically based on the model
+# VAE training configuration - Conference settings
+VAE_EPOCHS = 25                    # VAE training epochs (as requested)
+VAE_BATCH_SIZE = 64                # Suitable batch size for VAE
+VAE_LEARNING_RATE = 0.0005         # Learning rate for VAE
+VAE_PROJECTION_DIM = 256           # Projection dimension for VAE
+VAE_HIDDEN_DIM = 128               # Hidden dimension for VAE
+VAE_LATENT_DIM = 64                # Latent dimension for VAE
+GRADIENT_DIMENSION = None          # Will be set automatically
 
 # ======================================
 # DATA DISTRIBUTION CONFIGURATION
 # ======================================
 
-DATA_DISTRIBUTION = 'label_skew'   # Choose from: 'iid', 'label_skew', 'dirichlet'
-
-# Distribution parameters
-Q = 0.5                           # Label skew concentration
-DIRICHLET_ALPHA = 0.5             # Dirichlet concentration
-NON_IID_LABEL_RATIO = 0.5         # Label ratio for non-IID label split
+# Data distribution - IID for baseline testing
+ENABLE_NON_IID = False             # Using IID distribution for baseline
+DIRICHLET_ALPHA = None            # Not needed for IID
+LABEL_SKEW_RATIO = None           # Not needed for IID
+QUANTITY_SKEW_RATIO = None        # Not needed for IID
 
 # Root dataset configuration
-ROOT_DATASET_RATIO = 0.1          # Ratio of dataset to use as root dataset
-ROOT_DATASET_SIZE = 1000          # Used only if ROOT_DATASET_DYNAMIC_SIZE is False
-ROOT_DATASET_DYNAMIC_SIZE = True  # If True, use ROOT_DATASET_RATIO
+ROOT_DATASET_RATIO = 0.15         
+ROOT_DATASET_SIZE = 9000          
+ROOT_DATASET_DYNAMIC_SIZE = True  
 BIAS_PROBABILITY = 0.1
 BIAS_CLASS = 1
+
+# Distribution settings - تغییر به IID
+ENABLE_NON_IID = False             # غیرفعال برای IID
 
 # ======================================
 # GRADIENT COMBINATION METHOD CONFIGURATION
@@ -153,7 +155,7 @@ BIAS_CLASS = 1
 # - 'feddwa': Dynamic weighted aggregation based on client performance (Chai et al.)
 # - 'fednova': Normalized averaging based on local optimization steps (Wang et al.)
 # - 'fedbn_fedprox': Combination of FedBN and FedProx methods
-GRADIENT_COMBINATION_METHOD = 'fedbn'     # Using our improved FedBN implementation
+GRADIENT_COMBINATION_METHOD = 'fedbn_fedprox'     # Using combination of FedBN and FedProx for better performance
 
 # For backward compatibility
 AGGREGATION_METHOD = GRADIENT_COMBINATION_METHOD
@@ -177,28 +179,30 @@ FEDNOVA_NORMALIZE_UPDATES = True # Normalize updates based on local steps
 # MALICIOUS CLIENT DETECTION
 # ======================================
 
-# Dual Attention parameters
-ENABLE_DUAL_ATTENTION = True     # Enable dual attention-based malicious client detection
-DUAL_ATTENTION_HIDDEN_SIZE = 64  # Increased from 32 to 64 for better feature processing
-DUAL_ATTENTION_HEADS = 4         # Number of attention heads
-DUAL_ATTENTION_LAYERS = 2        # Number of transformer layers
+# Dual Attention parameters - Conference optimized
+ENABLE_DUAL_ATTENTION = True       # Enable dual attention-based detection
+DUAL_ATTENTION_HIDDEN_SIZE = 128   # Hidden size for attention mechanism
+DUAL_ATTENTION_HEADS = 8           # Number of attention heads
+DUAL_ATTENTION_LAYERS = 3          # Number of attention layers
+DUAL_ATTENTION_EPOCHS = 15         # Training epochs for dual attention
+DUAL_ATTENTION_BATCH_SIZE = 32     # Batch size for dual attention training
+DUAL_ATTENTION_LEARNING_RATE = 0.001  # Learning rate for dual attention
 
-# VAE parameters for anomaly detection
+# VAE parameters for anomaly detection - Enhanced for research
 ENABLE_VAE = True                # Enable VAE-based anomaly detection
 
-# Shapley value integration
+# Shapley value integration - Optimized for accuracy
 ENABLE_SHAPLEY = True            # Enable Shapley value calculation
-SHAPLEY_WEIGHT = 0.5             # Increased from 0.3 to 0.5 for stronger influence on trust scoring
-SHAPLEY_NUM_SAMPLES = 5          # Number of samples for Monte Carlo approximation
+SHAPLEY_SAMPLES = 10               # Number of Monte Carlo samples (good balance)
+SHAPLEY_WEIGHT = 0.4               # Weight of Shapley value in trust score
+VALIDATION_RATIO = 0.15            # Validation ratio for Shapley calculation
+SHAPLEY_BATCH_SIZE = 128           # Batch size for Shapley calculation
 
-# Malicious weighting method
-# Options: 'binary', 'continuous', 'squared', 'sqrt'
+# Malicious weighting method - Research-grade configuration
 MALICIOUS_WEIGHTING_METHOD = 'continuous'
 
-# Malicious penalty factor (0-1)
-# Higher values (closer to 1) give much lower weights to detected malicious clients
-# Lower values are more lenient. 0 means no special penalty beyond trust score
-MALICIOUS_PENALTY_FACTOR = 0.98  # Strong penalty for detected malicious clients
+# Malicious penalty factor - Optimized for strong detection
+MALICIOUS_PENALTY_FACTOR = 0.85  # Reduced from 0.95 for stronger detection
 
 # Attacker impact weighing
 ATTACKER_IMPACT_WEIGHING = True    # Enable attacker impact weighing
@@ -213,12 +217,16 @@ ATTACKER_IMPACT_WEIGHING = True    # Enable attacker impact weighing
 # - 'dual_attention': Use only the dual attention mechanism
 # - 'rl_actor_critic': Use only the RL actor-critic approach
 # - 'hybrid': Start with dual attention, then gradually transition to RL
-RL_AGGREGATION_METHOD = 'hybrid'  # Options: 'dual_attention', 'rl_actor_critic', 'hybrid'
+RL_AGGREGATION_METHOD = 'hybrid'    # Using hybrid approach as intended
 
 # RL Actor-Critic Parameters
 RL_ACTOR_HIDDEN_DIMS = [128, 64]       # Hidden layer dimensions for actor network
 RL_CRITIC_HIDDEN_DIMS = [128, 64]      # Hidden layer dimensions for critic network
-RL_LEARNING_RATE = 0.001
+RL_LEARNING_RATE = 0.001           # Learning rate for RL agent
+RL_EPSILON = 0.1                   # Exploration rate for RL
+RL_MEMORY_SIZE = 1000              # Memory size for experience replay
+RL_BATCH_SIZE = 32                 # Batch size for RL training
+RL_UPDATE_FREQUENCY = 5            # Update RL agent every N rounds
 RL_GAMMA = 0.99
 RL_ENTROPY_COEF = 0.01
 RL_INITIAL_TEMP = 5.0
@@ -234,27 +242,26 @@ RL_SAVE_INTERVAL = 50
 # ATTACK CONFIGURATION
 # ======================================
 
-# Attack simulation parameters
+# Attack simulation parameters - Optimized for comprehensive research evaluation
 ENABLE_ATTACK_SIMULATION = True  # Enable attack simulation
-ATTACK_TYPE = 'partial_scaling_attack'  # Type of attack to simulate
+# ATTACK_TYPE = 'partial_scaling_attack'  # Removed: main.py tests all attacks systematically
 
 # Available attack types:
 # - 'scaling_attack': Scale gradients to increase their impact
 # - 'partial_scaling_attack': Scale only a portion of the gradients
 # - 'label_flipping': Flip labels during training
-# - 'sign_flipping': Flip the sign of the gradients
-# - 'noise_injection': Add random noise to gradients
-# - 'min_max': Minimize loss for some classes, maximize for others
-# - 'min_sum': Minimize loss for targeted samples
-# - 'targeted_parameters': Attack specific model parameters
+# - 'sign_flipping_attack': Flip the sign of the gradients  
+# - 'noise_attack': Add random noise to gradients
+# - 'min_max_attack': Minimize loss for some classes, maximize for others
+# - 'min_sum_attack': Minimize loss for targeted samples
+# - 'targeted_attack': Attack specific model parameters
 
-# Attack parameters
-SCALING_FACTOR = 20.0            # Increased from 15.0 to 20.0 for more obvious attacks
-PARTIAL_SCALING_PERCENT = 0.4    # Increased from 0.3 to 0.4 to affect more gradients
-FLIP_PROBABILITY = 0.8           # Probability of flipping a label in label flipping attack
-NOISE_FACTOR = 5.0               # Factor for noise magnitude in noise injection attack
-TARGETED_CLASS = 1               # Target class for class-targeted attacks
-EPSILON_L2 = 1.0                 # L2 constraint for projected gradient attacks
+# Attack parameters - Conference suitable
+SCALING_FACTOR = 10.0              # Strong but not extreme scaling
+PARTIAL_SCALING_PERCENT = 0.5      # 50% of gradient components
+NOISE_FACTOR = 5.0                 # Moderate noise level
+FLIP_PROBABILITY = 0.8             # High flip probability
+TARGETED_CLASS = 7                 # Target class for targeted attacks
 
 # ======================================
 # PRIVACY CONFIGURATION
@@ -279,8 +286,8 @@ LOGGING_LEVEL = 'INFO'               # Logging level: 'DEBUG', 'INFO', 'WARNING'
 SAVE_MODEL = True                    # Save final global model
 MODEL_SAVE_PATH = 'model_weights/'   # Path to save model
 
-# Random seed
-SEED = 42                            # Random seed for reproducibility
+# Random seed for reproducibility - Conference requirement
+RANDOM_SEED = 42                   # Fixed seed for reproducible results
 
 # System-wide random seed for reproducibility
 RANDOM_SEED = 42
@@ -306,33 +313,63 @@ DEVICE = device  # Use the device configured above
 # SHAPLEY VALUE CONFIGURATION
 # ======================================
 
-# Enable Shapley value calculation
-ENABLE_SHAPLEY = True              # Whether to calculate Shapley values to measure client contributions
-SHAPLEY_SAMPLES = 5                # Number of Monte Carlo samples for Shapley estimation (higher = more accurate but slower)
-SHAPLEY_WEIGHT = 0.3               # Weight of Shapley value in the final trust score (0.0-1.0)
-VALIDATION_RATIO = 0.1             # Ratio of test data to use for validation during Shapley calculation
-SHAPLEY_BATCH_SIZE = 64            # Batch size for validation during Shapley calculation
+# Enable Shapley value calculation - Conference settings
+ENABLE_SHAPLEY = True              # Enable Shapley value calculation
+SHAPLEY_SAMPLES = 10               # Number of Monte Carlo samples (good balance)
+SHAPLEY_WEIGHT = 0.4               # Weight of Shapley value in trust score
+VALIDATION_RATIO = 0.15            # Validation ratio for Shapley calculation
+SHAPLEY_BATCH_SIZE = 128           # Batch size for Shapley calculation
 
 # Performance impact of Shapley calculation
 # The Shapley calculation adds computational overhead but provides 
 # a principled way to measure each client's contribution to model performance.
-# For larger models or with many clients, consider reducing SHAPLEY_SAMPLES
-# or setting ENABLE_SHAPLEY=False if computational resources are limited. 
+# With higher SHAPLEY_SAMPLES (15), accuracy improves but computation increases.
+# For publication-quality results, this trade-off is worthwhile.
 
 # Add missing configuration variables
 NORMALIZE_GRADIENTS = True
 GRADIENT_CLIP_VALUE = 10.0
 # Make sure AGGREGATION_METHOD is defined if not already
 if 'AGGREGATION_METHOD' not in globals():
-    AGGREGATION_METHOD = 'fedbn' 
+    AGGREGATION_METHOD = 'fedbn_fedprox'  # Updated to match GRADIENT_COMBINATION_METHOD
 
-# Distribution settings
-ENABLE_NON_IID = True       # Whether to use non-IID distribution for client datasets
-DIRICHLET_ALPHA = 0.5       # Lower alpha means more non-IID (only used if ENABLE_NON_IID is True) 
+# Malicious clients - Research-optimized configuration
+MALICIOUS_CLIENT_RATIO = 0.3      # 30% malicious clients (standard for research evaluation)
 
-# Malicious clients
-MALICIOUS_CLIENT_RATIO = 0.33      # Ratio of malicious clients
+# Attack settings - Enhanced for comprehensive evaluation
+SCALING_FRACTION = 0.5              # Increased fraction of parameters to scale for stronger attacks
 
-# Attack settings
-DEFAULT_ATTACK_TYPE = 'partial_scaling'  # Attack type to use if unspecified
-SCALING_FRACTION = 0.5              # Fraction of parameters to scale for partial scaling attack 
+# Note: Removed DEFAULT_ATTACK_TYPE to avoid redundancy with ATTACK_TYPE parameter
+# Use ATTACK_TYPE (defined in Attack Configuration section) to set the attack type
+
+# ======================================
+# ENHANCED DETECTION CONFIGURATION
+# ======================================
+
+# Detection threshold optimization - FIXED for better accuracy
+GRADIENT_NORM_THRESHOLD_FACTOR = 2.0    # Reduced from 3.0 for more sensitive norm detection
+GRADIENT_NORM_MIN_THRESHOLD = 0.2       # Reduced from 0.3 for lower floor
+ZERO_ATTACK_THRESHOLD = 0.005           # Much lower - only catch truly zero attacks (vs 0.02)
+SUSPICIOUS_CLIENT_PENALTY = 0.7         # Reduced from 0.85 to allow better model learning
+
+# Trust score thresholding - Improved balance
+TRUST_SCORE_THRESHOLD = 0.5            # Increased from 0.30 for more specific detection
+ADAPTIVE_THRESHOLD = True               # Enable adaptive thresholding based on distribution
+
+# # Model improvement settings - ENHANCED for better learning
+# LOCAL_EPOCHS_CLIENT = 10                # Increased from 8 to 10 for stronger local updates
+# GLOBAL_EPOCHS = 30                      # Increased back to 30 for more comprehensive training
+# LR = 0.01                               # Increased from 0.008 for faster convergence
+
+# Additional detection refinements
+FALSE_POSITIVE_MITIGATION = True        # Enable additional checks to reduce false positives
+MIN_CLIENTS_FOR_DETECTION = 2          # Require at least 2 suspicious patterns before flagging
+GRADIENT_VARIANCE_THRESHOLD = 0.6       # Reduced from 0.8 for more variance sensitivity
+
+# Detection thresholds - Conference optimized  
+MALICIOUS_THRESHOLD = 0.5          # Reduced from 0.65 for more sensitive detection
+CONFIDENCE_THRESHOLD = 0.5         # Reduced from 0.7 for better balance
+DETECTION_SENSITIVITY = 0.9        # Increased from 0.8 for higher sensitivity
+
+# Note: RL_AGGREGATION_METHOD is already defined above as 'hybrid'
+# Removed duplicate RL configuration to avoid conflicts
