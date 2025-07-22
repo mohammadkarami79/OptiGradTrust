@@ -84,11 +84,11 @@ class Server:
                 
             return CNNMnist(in_channels=in_channels, num_classes=num_classes)
             
-        elif MODEL == 'RESNET50':
+        elif MODEL == 'ResNet50':
             num_classes = 10 if DATASET == 'MNIST' or DATASET == 'CIFAR10' else ALZHEIMER_CLASSES
             return ResNet50Alzheimer(num_classes=num_classes)
             
-        elif MODEL == 'RESNET18':
+        elif MODEL == 'ResNet18':
             num_classes = 10 if DATASET == 'MNIST' or DATASET == 'CIFAR10' else ALZHEIMER_CLASSES
             return ResNet18Alzheimer(num_classes=num_classes)
             

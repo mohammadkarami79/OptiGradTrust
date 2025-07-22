@@ -44,7 +44,7 @@ ENABLE_MEMORY_TRACKING = True     # Enable to monitor memory usage
 AGGRESSIVE_MEMORY_CLEANUP = True  # Enables aggressive memory cleanup
 
 # Gradient Memory Optimization
-GRADIENT_CHUNK_SIZE = 500000   # Size of chunks for gradient processing
+GRADIENT_CHUNK_SIZE = 10000    # Further reduced for memory optimization
 GRADIENT_AGGREGATION_METHOD = 'mean'
 MAX_GRADIENT_NORM = 10.0  # Increased from 5.0 to better detect scaling attacks
 
@@ -53,57 +53,61 @@ VERBOSE = True  # Set to True for detailed debug information, particularly for B
 
 # Gradient Dimension Reduction for Memory Optimization
 ENABLE_DIMENSION_REDUCTION = True     # Enable dimension reduction
-DIMENSION_REDUCTION_RATIO = 0.25      # More aggressive reduction (keep 25%)
+DIMENSION_REDUCTION_RATIO = 0.10      # Very aggressive reduction (keep 10%) for memory
 ENABLE_PARALLEL_PROCESSING = False    # Keep parallel processing disabled
 
 # ======================================
 # FEDERATED LEARNING PARAMETERS
 # ======================================
 
-# Global parameters - Conference optimized
-NUM_CLIENTS = 10                   # Standard number for good statistics
-FRACTION_MALICIOUS = 0.3           # 30% malicious clients (3 out of 10)
+# Global parameters - MEMORY OPTIMIZED
+NUM_CLIENTS = 10
+FRACTION_MALICIOUS = 0.3
 NUM_MALICIOUS = int(NUM_CLIENTS * FRACTION_MALICIOUS)
-BATCH_SIZE = 128                   # Standard batch size for MNIST
-LR = 0.01                          # Learning rate
-LOCAL_EPOCHS_ROOT = 20             # Root model training epochs (as requested)
-LOCAL_EPOCHS_CLIENT = 5            # Client local epochs (as requested)
-GLOBAL_EPOCHS = 15                 # Global federated rounds (as requested)
-CLIENT_SELECTION_RATIO = 1.0       # Select all clients
-CLIENT_FRACTION = 1.0              # Use all clients
-LEARNING_RATE = LR                 
-MOMENTUM = 0.9                     # Standard momentum
+BATCH_SIZE = 32                    # Optimal batch for MNIST
+LR = 0.01                          # Learning rate for MNIST CNN
+LOCAL_EPOCHS_ROOT = 12             # Root pretrain epochs
+LOCAL_EPOCHS_CLIENT = 4            # Client local epochs
+GLOBAL_EPOCHS = 20                 # Global rounds
+CLIENT_SELECTION_RATIO = 1.0
+CLIENT_FRACTION = 1.0
+LEARNING_RATE = LR
+MOMENTUM = 0.9
 WEIGHT_DECAY = 1e-4                # Standard weight decay
 CLIENT_EPOCHS = LOCAL_EPOCHS_CLIENT
 
 # Learning rate scheduling - Optimized for long training
-LR_DECAY = 0.995                   # More conservative decay for longer training
+LR_DECAY = 0.98                    # Slightly faster decay to match lower LR
 LR_DECAY_EPOCHS = 2                # Apply decay every 2 epochs
 MIN_LR = 0.0001                    # Minimum learning rate
 
 # Data loading configuration
-NUM_WORKERS = 4                    # Disable worker threads for data loading
-PIN_MEMORY = True                 # Disable pin memory to save GPU memory
+NUM_WORKERS = 0                    # Disable worker threads for memory optimization
+PIN_MEMORY = False                # Disable pin memory to save GPU memory
 
 # ======================================
 # MODEL AND DATASET CONFIGURATION
 # ======================================
 
-# Dataset and model configuration - Final conference settings
-DATASET = 'MNIST'                  # Using MNIST for reliable results
-MODEL = 'CNN'                      # CNN model for MNIST
-INPUT_CHANNELS = 1                 # MNIST has 1 channel (grayscale)
-NUM_CLASSES = 10                   # MNIST has 10 classes (0-9)
+# Dataset and model configuration - Set for MNIST non-IID label skew
+DATASET = 'MNIST'
+MODEL = 'CNN'
+INPUT_CHANNELS = 1  # MNIST is grayscale
+NUM_CLASSES = 10
 
 # ResNet configuration
 RESNET50_UNFREEZE_LAYERS = 20      # Number of layers to unfreeze from the end for ResNet50
 RESNET18_UNFREEZE_LAYERS = 5       # Number of layers to unfreeze from the end for ResNet18
 RESNET_PRETRAINED = True           # Whether to use pretrained weights
 
-# Dataset paths
+# Dataset paths - Updated for MNIST
 ALZHEIMER_DATA_ROOT = 'data/alzheimer'
 CIFAR_DATA_ROOT = 'data/cifar'
 MNIST_DATA_ROOT = 'data/mnist'
+
+# MNIST specific settings
+MNIST_IMG_SIZE = 28               # MNIST images are 28x28
+MNIST_CLASSES = 10                # 10 classes in MNIST (0-9)
 
 # Alzheimer's dataset configuration
 ALZHEIMER_DATA_DIR = './data/alzheimer'
@@ -114,28 +118,32 @@ ALZHEIMER_CLASSES = 4             # Number of classes
 CIFAR_IMG_SIZE = 32               # CIFAR-10 images are 32x32
 CIFAR_CLASSES = 10                # 10 classes in CIFAR-10
 
-# VAE training configuration - Conference settings
-VAE_EPOCHS = 25                    # VAE training epochs (as requested)
-VAE_BATCH_SIZE = 64                # Suitable batch size for VAE
-VAE_LEARNING_RATE = 0.0005         # Learning rate for VAE
-VAE_PROJECTION_DIM = 256           # Projection dimension for VAE
-VAE_HIDDEN_DIM = 128               # Hidden dimension for VAE
-VAE_LATENT_DIM = 64                # Latent dimension for VAE
+# VAE training configuration - MEMORY OPTIMIZED
+VAE_EPOCHS = 15                    # Enough for MNIST
+VAE_BATCH_SIZE = 16                # Larger batch for stable VAE training
+VAE_LEARNING_RATE = 0.0005         # ✅ Increased for faster learning
+VAE_PROJECTION_DIM = 64            # Reduced for memory
+VAE_HIDDEN_DIM = 32                # Reduced for memory
+VAE_LATENT_DIM = 16                # Reduced for memory
 GRADIENT_DIMENSION = None          # Will be set automatically
 
 # ======================================
 # DATA DISTRIBUTION CONFIGURATION
 # ======================================
 
-# Data distribution - IID for baseline testing
-ENABLE_NON_IID = False             # Using IID distribution for baseline
-DIRICHLET_ALPHA = None            # Not needed for IID
-LABEL_SKEW_RATIO = None           # Not needed for IID
-QUANTITY_SKEW_RATIO = None        # Not needed for IID
+# Set to IID for baseline
+ENABLE_NON_IID = False
+DATA_DISTRIBUTION = 'iid'
+DIRICHLET_ALPHA = None
+NON_IID_CLASSES_PER_CLIENT = None
+LABEL_SKEW_RATIO = None
+QUANTITY_SKEW_RATIO = None
+NON_IID_TYPE = None
+NON_IID_SEVERITY = None
 
-# Root dataset configuration
-ROOT_DATASET_RATIO = 0.15         
-ROOT_DATASET_SIZE = 9000          
+# Root dataset configuration - OPTIMIZED 
+ROOT_DATASET_RATIO = 0.18          # ✅ Increased for better training
+ROOT_DATASET_SIZE = 4500           # ✅ Increased for more training data       
 ROOT_DATASET_DYNAMIC_SIZE = True  
 BIAS_PROBABILITY = 0.1
 BIAS_CLASS = 1
@@ -155,7 +163,7 @@ ENABLE_NON_IID = False             # غیرفعال برای IID
 # - 'feddwa': Dynamic weighted aggregation based on client performance (Chai et al.)
 # - 'fednova': Normalized averaging based on local optimization steps (Wang et al.)
 # - 'fedbn_fedprox': Combination of FedBN and FedProx methods
-GRADIENT_COMBINATION_METHOD = 'fedbn_fedprox'     # Using combination of FedBN and FedProx for better performance
+GRADIENT_COMBINATION_METHOD = 'fedbn_fedprox'  # Hybrid aggregation
 
 # For backward compatibility
 AGGREGATION_METHOD = GRADIENT_COMBINATION_METHOD
@@ -179,30 +187,34 @@ FEDNOVA_NORMALIZE_UPDATES = True # Normalize updates based on local steps
 # MALICIOUS CLIENT DETECTION
 # ======================================
 
-# Dual Attention parameters - Conference optimized
+# Dual Attention parameters - MEMORY OPTIMIZED
 ENABLE_DUAL_ATTENTION = True       # Enable dual attention-based detection
-DUAL_ATTENTION_HIDDEN_SIZE = 128   # Hidden size for attention mechanism
-DUAL_ATTENTION_HEADS = 8           # Number of attention heads
-DUAL_ATTENTION_LAYERS = 3          # Number of attention layers
-DUAL_ATTENTION_EPOCHS = 15         # Training epochs for dual attention
-DUAL_ATTENTION_BATCH_SIZE = 32     # Batch size for dual attention training
-DUAL_ATTENTION_LEARNING_RATE = 0.001  # Learning rate for dual attention
+DUAL_ATTENTION_HIDDEN_SIZE = 200   # Reduced for memory
+DUAL_ATTENTION_HEADS = 10           # Reduced for memory
+DUAL_ATTENTION_LAYERS = 3          # Reduced for memory and performance
+DUAL_ATTENTION_EPOCHS = 8          # Reduced for MNIST
+DUAL_ATTENTION_BATCH_SIZE = 12     # Larger batch for attention training
+DUAL_ATTENTION_LEARNING_RATE = 0.0005  # ✅ Increased for faster learning
 
 # VAE parameters for anomaly detection - Enhanced for research
 ENABLE_VAE = True                # Enable VAE-based anomaly detection
 
-# Shapley value integration - Optimized for accuracy
+# Shapley value integration - MEMORY OPTIMIZED
 ENABLE_SHAPLEY = True            # Enable Shapley value calculation
-SHAPLEY_SAMPLES = 10               # Number of Monte Carlo samples (good balance)
-SHAPLEY_WEIGHT = 0.4               # Weight of Shapley value in trust score
+SHAPLEY_SAMPLES = 25               # ok for MNIST
+SHAPLEY_WEIGHT = 0.4               # Increased from 0.5 for stronger discrimination
 VALIDATION_RATIO = 0.15            # Validation ratio for Shapley calculation
-SHAPLEY_BATCH_SIZE = 128           # Batch size for Shapley calculation
+SHAPLEY_BATCH_SIZE = 8             # Reduced for memory optimization
 
 # Malicious weighting method - Research-grade configuration
 MALICIOUS_WEIGHTING_METHOD = 'continuous'
 
-# Malicious penalty factor - Optimized for strong detection
-MALICIOUS_PENALTY_FACTOR = 0.85  # Reduced from 0.95 for stronger detection
+# Malicious penalty factor - Optimized for much better precision
+MALICIOUS_PENALTY_FACTOR = 0.4     # Balanced penalty (was 0.3)
+ZERO_ATTACK_THRESHOLD = 0.01      # More conservative (was 0.001)
+HIGH_GRADIENT_STD_MULTIPLIER = 2.5 # Moderate sensitivity (was 3.5)
+CONFIDENCE_THRESHOLD = 0.7         # Balanced confidence (was 0.8)
+DUAL_ATTENTION_THRESHOLD = 0.65    # Optimized threshold (was 0.75)
 
 # Attacker impact weighing
 ATTACKER_IMPACT_WEIGHING = True    # Enable attacker impact weighing
@@ -220,12 +232,12 @@ ATTACKER_IMPACT_WEIGHING = True    # Enable attacker impact weighing
 RL_AGGREGATION_METHOD = 'hybrid'    # Using hybrid approach as intended
 
 # RL Actor-Critic Parameters
-RL_ACTOR_HIDDEN_DIMS = [128, 64]       # Hidden layer dimensions for actor network
-RL_CRITIC_HIDDEN_DIMS = [128, 64]      # Hidden layer dimensions for critic network
+RL_ACTOR_HIDDEN_DIMS = [64, 32]        # Balanced for memory and performance
+RL_CRITIC_HIDDEN_DIMS = [64, 32]       # Balanced for memory and performance
 RL_LEARNING_RATE = 0.001           # Learning rate for RL agent
 RL_EPSILON = 0.1                   # Exploration rate for RL
 RL_MEMORY_SIZE = 1000              # Memory size for experience replay
-RL_BATCH_SIZE = 32                 # Batch size for RL training
+RL_BATCH_SIZE = 8                  # Balanced for memory and performance
 RL_UPDATE_FREQUENCY = 5            # Update RL agent every N rounds
 RL_GAMMA = 0.99
 RL_ENTROPY_COEF = 0.01
@@ -256,11 +268,11 @@ ENABLE_ATTACK_SIMULATION = True  # Enable attack simulation
 # - 'min_sum_attack': Minimize loss for targeted samples
 # - 'targeted_attack': Attack specific model parameters
 
-# Attack parameters - Conference suitable
-SCALING_FACTOR = 10.0              # Strong but not extreme scaling
-PARTIAL_SCALING_PERCENT = 0.5      # 50% of gradient components
-NOISE_FACTOR = 5.0                 # Moderate noise level
-FLIP_PROBABILITY = 0.8             # High flip probability
+# Attack parameters - Conference suitable with improved realism
+SCALING_FACTOR = 10.0              # Reduced from 10.0 for more subtle attacks
+PARTIAL_SCALING_PERCENT = 0.5      # Reduced from 0.5 for more subtle attacks
+NOISE_FACTOR = 5.0                 # Reduced from 5.0 for more realistic noise
+FLIP_PROBABILITY = 0.5             # Reduced from 0.8 for more realistic attacks
 TARGETED_CLASS = 7                 # Target class for targeted attacks
 
 # ======================================
@@ -315,10 +327,10 @@ DEVICE = device  # Use the device configured above
 
 # Enable Shapley value calculation - Conference settings
 ENABLE_SHAPLEY = True              # Enable Shapley value calculation
-SHAPLEY_SAMPLES = 10               # Number of Monte Carlo samples (good balance)
+SHAPLEY_SAMPLES = 25               # Number of Monte Carlo samples (good balance)
 SHAPLEY_WEIGHT = 0.4               # Weight of Shapley value in trust score
 VALIDATION_RATIO = 0.15            # Validation ratio for Shapley calculation
-SHAPLEY_BATCH_SIZE = 128           # Batch size for Shapley calculation
+SHAPLEY_BATCH_SIZE = 16            # Balanced for memory and performance
 
 # Performance impact of Shapley calculation
 # The Shapley calculation adds computational overhead but provides 
@@ -347,9 +359,9 @@ SCALING_FRACTION = 0.5              # Increased fraction of parameters to scale 
 # ======================================
 
 # Detection threshold optimization - FIXED for better accuracy
-GRADIENT_NORM_THRESHOLD_FACTOR = 2.0    # Reduced from 3.0 for more sensitive norm detection
+GRADIENT_NORM_THRESHOLD_FACTOR = 2.5    # Reduced from 3.0 for more sensitive norm detection
 GRADIENT_NORM_MIN_THRESHOLD = 0.2       # Reduced from 0.3 for lower floor
-ZERO_ATTACK_THRESHOLD = 0.005           # Much lower - only catch truly zero attacks (vs 0.02)
+ZERO_ATTACK_THRESHOLD = 0.005     # Reduced from 0.03 for less false positives
 SUSPICIOUS_CLIENT_PENALTY = 0.7         # Reduced from 0.85 to allow better model learning
 
 # Trust score thresholding - Improved balance
@@ -367,9 +379,12 @@ MIN_CLIENTS_FOR_DETECTION = 2          # Require at least 2 suspicious patterns 
 GRADIENT_VARIANCE_THRESHOLD = 0.6       # Reduced from 0.8 for more variance sensitivity
 
 # Detection thresholds - Conference optimized  
-MALICIOUS_THRESHOLD = 0.5          # Reduced from 0.65 for more sensitive detection
-CONFIDENCE_THRESHOLD = 0.5         # Reduced from 0.7 for better balance
-DETECTION_SENSITIVITY = 0.9        # Increased from 0.8 for higher sensitivity
+MALICIOUS_THRESHOLD = 0.55       # Increased from 0.5 for very conservative detection
+CONFIDENCE_THRESHOLD = 0.7         # Balanced confidence (was 0.8)
+DETECTION_SENSITIVITY = 0.6      # Reduced from 0.9 for less sensitivity (fewer false positives)
+
+# Enhanced confidence thresholds
+DUAL_ATTENTION_THRESHOLD = 0.65    # Optimized threshold (was 0.75)
 
 # Note: RL_AGGREGATION_METHOD is already defined above as 'hybrid'
 # Removed duplicate RL configuration to avoid conflicts

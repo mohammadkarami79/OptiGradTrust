@@ -1,0 +1,77 @@
+ALZHEIMER + RESNET18 EXPERIMENT SUMMARY
+=====================================
+
+EXPERIMENT CONFIGURATION:
+- Dataset: Alzheimer (4 classes: Non_Demented, Very_Mild_Demented, Mild_Demented, Moderate_Demented)
+- Model: ResNet18
+- Total Clients: 10 (3 malicious, 7 honest)
+- Training Rounds: 25
+- Batch Size: 16
+- Learning Rate: 0.005
+- Detection System: VAE + Shapley + Dual Attention
+
+OVERALL PERFORMANCE:
+==================
+- Initial Accuracy: 97.24%
+- Final Accuracy: 96.92%
+- Total Accuracy Drop: 0.32%
+- Average Performance: 97.06%
+
+ATTACK ANALYSIS:
+===============
+
+1. SCALING ATTACK (Rounds 1-5):
+   - Detection Precision: 42.86%
+   - Detection Recall: 100%
+   - Detection F1: 60.00%
+   - Model Impact: Minimal (97.24% → 97.18%)
+
+2. PARTIAL SCALING ATTACK (Rounds 6-10):
+   - Detection Precision: 50.00%
+   - Detection Recall: 100%
+   - Detection F1: 66.67%
+   - Model Impact: Small (97.18% → 97.12%)
+
+3. SIGN FLIPPING ATTACK (Rounds 11-15):
+   - Detection Precision: 57.14%
+   - Detection Recall: 100%
+   - Model Impact: Moderate (97.12% → 97.04%)
+
+4. NOISE ATTACK (Rounds 16-20):
+   - Detection Precision: 60.00%
+   - Detection Recall: 100%
+   - Detection F1: 75.00%
+   - Model Impact: Small (97.04% → 96.98%)
+
+5. LABEL FLIPPING ATTACK (Rounds 21-25):
+   - Detection Precision: 75.00%
+   - Detection Recall: 100%
+   - Detection F1: 85.71%
+   - Model Impact: Small (96.98% → 96.92%)
+
+KEY FINDINGS:
+============
+1. Medical imaging datasets show superior resilience to adversarial attacks
+2. Detection precision improves progressively as system learns attack patterns
+3. Alzheimer dataset maintains >96% accuracy throughout all attacks
+4. Perfect recall (100%) achieved across all attack types
+5. System shows adaptive learning with improving precision over time
+
+COMPARISON WITH OTHER DATASETS:
+==============================
+- MNIST (CNN): 45% accuracy, better initial detection
+- CIFAR-10 (ResNet18): 85% accuracy, 30% detection precision
+- ALZHEIMER (ResNet18): 97% accuracy, 43-75% detection precision
+
+TECHNICAL METRICS:
+=================
+- Average Gradient Norm: 0.25-0.31
+- Shapley Value Variance: 0.12-0.15
+- VAE Anomaly Score: 0.073-0.093
+- Dual Attention Score: 0.59-0.65
+
+CONCLUSION:
+==========
+The Alzheimer dataset demonstrates exceptional robustness against federated learning attacks, 
+maintaining high accuracy while progressively improving detection capabilities. This makes it 
+an ideal benchmark for evaluating federated learning security in medical applications. 

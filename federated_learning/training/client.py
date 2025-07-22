@@ -248,7 +248,7 @@ class Client:
                 
             self.model = CNNMnist(in_channels=in_channels, num_classes=num_classes).to(self.device)
             
-        elif MODEL == 'RESNET50':
+        elif MODEL == 'ResNet50':
             if num_classes is None:
                 if DATASET == 'MNIST':
                     num_classes = 10
@@ -265,7 +265,7 @@ class Client:
                 pretrained=RESNET_PRETRAINED
             ).to(self.device)
             
-        elif MODEL == 'RESNET18':
+        elif MODEL == 'ResNet18':
             if num_classes is None:
                 if DATASET == 'MNIST':
                     num_classes = 10
@@ -312,7 +312,7 @@ class Client:
         
         # Initialize gradient dimension reducer if enabled
         self.dimension_reducer = None
-        if ENABLE_DIMENSION_REDUCTION and (MODEL == 'RESNET50' or MODEL == 'RESNET18'):
+        if ENABLE_DIMENSION_REDUCTION and (MODEL == 'ResNet50' or MODEL == 'ResNet18'):
             self.dimension_reducer = GradientDimensionReducer(reduction_ratio=DIMENSION_REDUCTION_RATIO)
             print(f"Client {client_id}: Dimension reducer initialized with ratio {DIMENSION_REDUCTION_RATIO}")
 
