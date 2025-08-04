@@ -538,6 +538,6 @@ For questions, issues, or collaboration opportunities regarding OptiGradTrust:
 - 🛡️ **Superior Byzantine robustness** compared to state-of-the-art methods
 - 📊 **Multi-domain validation** across vision, computer vision, and medical imaging
 
-**Last Updated**: August 2024  
+**Last Updated**: August 2025  
 **Version**: 3.0.0 - OptiGradTrust Release  
 **Paper Status**: Ready for Journal Submission 
