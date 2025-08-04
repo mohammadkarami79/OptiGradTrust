@@ -12,6 +12,8 @@
 
 Federated Learning (FL) enables collaborative model training across distributed medical institutions while preserving patient privacy, but remains vulnerable to Byzantine attacks and statistical heterogeneity. We present **OptiGradTrust**, a comprehensive defense framework that evaluates gradient updates through a novel six-dimensional fingerprint including VAE reconstruction error, cosine similarity metrics, L2 norm, sign-consistency ratio, and Monte Carlo Shapley value, which drive a hybrid RL-attention module for adaptive trust scoring. To address convergence challenges under data heterogeneity, we develop **FedBN-Prox (FedBN-P)**, combining Federated Batch Normalization with proximal regularization for optimal accuracy-convergence trade-offs. Extensive evaluation across MNIST, CIFAR-10, and Alzheimer's MRI datasets under various Byzantine attack scenarios demonstrates significant improvements over state-of-the-art defenses, achieving up to **+1.6 percentage points** over FLGuard under non-IID conditions while maintaining robust performance against diverse attack patterns through our adaptive learning approach.
 
+**Index Terms—**Federated Learning, Byzantine Attacks, Reinforcement Learning, Non-IID Distribution, Medical Applications, Gradient Fingerprinting, Trust Weighting, Robust Aggregation
+
 ## Key Features
 
 ### 🛡️ **OptiGradTrust Core Innovations**
@@ -59,10 +61,11 @@ Federated Learning (FL) enables collaborative model training across distributed 
 - **Results Management**: Comprehensive experiment tracking and reproducibility tools
 
 ### 🏥 **Medical AI Applications**
-- **Alzheimer's Disease Classification**: MRI-based diagnosis with privacy preservation
+- **Alzheimer's Disease Classification**: MRI-based diagnosis with privacy preservation using 6,983 T1-weighted scans
 - **Progressive Learning Phenomenon**: First documented adaptive improvement in medical FL
 - **Detection Rate Improvement**: 42.86% → 75.00% (+32.14pp) across training rounds
-- **Privacy-Preserving**: Secure collaboration across medical institutions
+- **Privacy-Preserving**: Secure collaboration across medical institutions under HIPAA and GDPR regulations
+- **Multi-Institutional Collaboration**: Enables rural hospitals to contribute to and benefit from models trained with top-tier research centers
 
 ## OptiGradTrust Architecture
 
@@ -115,8 +118,8 @@ OptiGradTrust Framework
 ### Setup
 ```bash
 # Clone the OptiGradTrust repository
-git clone <repository-url>
-cd new_paper
+git clone https://github.com/mohammadkarami79/OptiGradTrust
+cd OptiGradTrust
 
 # Create virtual environment
 python -m venv venv
@@ -147,7 +150,7 @@ python main.py --dataset ALZHEIMER --model CNN --attack_type scaling
 python run_fltrust_experiments.py
 
 # Generate comparison plots and analysis
-python create_plots.py
+python -m federated_learning.utils.plotting_utils
 ```
 
 ### Configuration Examples
@@ -232,12 +235,12 @@ ATTACK_INTENSITIES = {
 ### 4. **OptiGradTrust Detection Pipeline**
 
 #### Six-Dimensional Gradient Fingerprinting
-1. **VAE Reconstruction Error**: Advanced anomaly detection using variational autoencoders trained on root gradients
-2. **Root Similarity**: Cosine similarity between client gradients and server root dataset gradients
-3. **Client Similarity**: Inter-client gradient cosine similarity for collective behavior analysis
-4. **L2 Norm Analysis**: Gradient magnitude consistency evaluation across training rounds
-5. **Sign-Consistency Ratio**: Proportion of gradient components with consistent directional alignment
-6. **Monte Carlo Shapley Value**: Game-theoretic client contribution analysis with statistical sampling
+1. **VAE Reconstruction Error**: Advanced anomaly detection using variational autoencoders (encoder dimensions [512,256,128], latent dimension 64) trained on historical benign gradients, updated every 20 rounds
+2. **Root Similarity**: Cosine similarity between client gradients and trusted server reference gradient from clean validation dataset (1000 samples)
+3. **Client Similarity**: Mean pairwise similarity with other client gradients for consensus alignment
+4. **L2 Norm Analysis**: Gradient magnitude consistency evaluation for scaling attack detection
+5. **Sign-Consistency Ratio**: Proportion of gradient components with consistent directional alignment compared to reference
+6. **Monte Carlo Shapley Value**: Game-theoretic client contribution analysis using 100 random permutations to measure marginal contribution to global validation performance
 
 #### Hybrid RL-Attention Trust Computation
 ```python
@@ -283,21 +286,23 @@ global_model = fedbn_prox_aggregation(model_params, bn_params, prox_term)
 - **Trust Score Distribution**: Statistical separation between honest and malicious clients
 
 ### **Multi-Domain Model Performance**
-- **Global Accuracy**: Test dataset performance across MNIST, CIFAR-10, Alzheimer's
-- **Convergence Stability**: FedBN-Prox optimization effectiveness
-- **Non-IID Robustness**: Performance under label skew and Dirichlet distributions
-- **Medical AI Accuracy**: Alzheimer's disease classification precision
+- **Global Accuracy**: Test dataset performance across MNIST (99.41%), CIFAR-10 (82.44%), Alzheimer's MRI (96.61%)
+- **Convergence Stability**: FedBN-Prox optimization effectiveness with 26 rounds average convergence
+- **Non-IID Robustness**: Performance under label skew (70%, 90%) and Dirichlet distributions (α=0.1, α=0.5)
+- **Medical AI Accuracy**: Alzheimer's disease classification precision with 6,983 T1-weighted scans
 
 ### **Comparative Analysis**
-- **State-of-the-Art Comparison**: Performance vs. FLTrust, FLGuard, baseline methods
+- **State-of-the-Art Comparison**: Performance vs. FLTrust, FLGuard, FLAME baseline methods
 - **Statistical Significance**: p-value analysis with Cohen's d effect sizes
-- **Attack Resilience**: Performance degradation under various Byzantine scenarios
-- **Computational Efficiency**: Overhead analysis of six-dimensional fingerprinting
+- **Attack Resilience**: Performance degradation under various Byzantine scenarios (5 attack types)
+- **Computational Efficiency**: Overhead analysis of six-dimensional fingerprinting with 100 Monte Carlo samples
+- **Superior Performance**: +1.59pp over FLGuard on MNIST, +1.74pp on CIFAR-10, +1.59pp on Alzheimer MRI under heterogeneous conditions
 
 ### **Medical AI Specific Metrics**
-- **Progressive Learning Phenomenon**: 42.86% → 75.00% detection rate improvement
-- **Privacy Preservation**: Differential privacy guarantees in medical federated learning
-- **Clinical Relevance**: Real-world applicability in healthcare scenarios
+- **Progressive Learning Phenomenon**: 42.86% → 75.00% detection rate improvement across training rounds
+- **Privacy Preservation**: Differential privacy guarantees (ε=8, δ=1×10⁻⁵) in medical federated learning
+- **Clinical Relevance**: Real-world applicability in healthcare scenarios with HIPAA/GDPR compliance
+- **Multi-Institutional Collaboration**: Enables secure collaboration between rural hospitals and top-tier research centers
 
 ## OptiGradTrust Configuration Guide
 
@@ -324,6 +329,8 @@ MALICIOUS_PENALTY_FACTOR = 0.98   # Trust-based penalty strength
 
 # Six-Dimensional Fingerprinting
 VAE_LATENT_DIM = 64               # VAE reconstruction dimension
+VAE_UPDATE_FREQ = 20              # VAE update frequency (rounds)
+SHAPLEY_SAMPLES = 100             # Monte Carlo Shapley permutations
 ATTENTION_HEADS = 8               # Multi-head attention
 RL_WARMUP_ROUNDS = 3              # RL training initialization
 ```
@@ -335,12 +342,14 @@ RL_AGGREGATION_METHOD = 'hybrid'   # OptiGradTrust hybrid approach
 RL_WARMUP_ROUNDS = 3              # RL system initialization
 RL_RAMP_UP_ROUNDS = 8             # Progressive learning integration
 ACTOR_CRITIC_LR = 0.001           # RL learning rate
+RL_REWARD_PARAMS = [1.0, 2.0, 3.0, 0.5]  # α, β, γ, δ multi-objective balance
 
 # Enhanced VAE Configuration
 VAE_EPOCHS = 10                   # Extended VAE training
 VAE_LATENT_DIM = 64               # Enhanced latent representation
 VAE_PROJECTION_DIM = 256          # High-dimensional gradient projection
 VAE_BETA = 1.0                    # Beta-VAE regularization
+VAE_ENCODER_DIMS = [512, 256, 128]  # Encoder architecture
 
 # Multi-Head Attention Architecture
 ATTENTION_HIDDEN_SIZE = 128       # Enhanced hidden layer capacity
@@ -350,8 +359,13 @@ ATTENTION_DROPOUT = 0.1           # Regularization for generalization
 
 # FedBN-Prox Optimization
 FEDBN_MOMENTUM = 0.9              # Batch normalization momentum
-FEDPROX_MU = 0.1                  # Proximal regularization strength
+FEDPROX_MU = 0.01                 # Proximal regularization strength (grid search optimized)
 CONVERGENCE_TOLERANCE = 1e-6      # Optimization convergence criteria
+
+# Privacy and Security
+DIFFERENTIAL_PRIVACY_EPSILON = 8   # Differential privacy parameter
+DIFFERENTIAL_PRIVACY_DELTA = 1e-5  # Differential privacy parameter
+QSGD_COMPRESSION = 4              # Gradient quantization ratio
 ```
 
 ## Testing Framework
@@ -359,7 +373,7 @@ CONVERGENCE_TOLERANCE = 1e-6      # Optimization convergence criteria
 ### Quick Validation
 ```bash
 # Test basic trust score logic
-python quick_test.py
+python -m federated_learning.test_basic
 
 # Expected output:
 # ✅ PASS: Honest clients have higher trust scores
@@ -370,7 +384,7 @@ python quick_test.py
 ### Comprehensive Testing
 ```bash
 # Test all configurations and attack types
-python test_comprehensive_fix.py
+python -m federated_learning.test_comprehensive
 
 # Tests include:
 # - Trust score logic validation
@@ -383,10 +397,10 @@ python test_comprehensive_fix.py
 ### Experiment Runner
 ```bash
 # Run predefined experiment configurations
-python run_experiments.py
+python main.py --experiment comprehensive
 
 # Custom experiment configuration
-python run_experiments.py --config custom_config.json --output results/custom/
+python main.py --config custom_config.json --output results/custom/
 ```
 
 ## Results Organization
@@ -485,20 +499,34 @@ print('Model loaded successfully')
 python -m memory_profiler main.py
 ```
 
+## Citation
+
+If you use OptiGradTrust in your research, please cite:
+
+```bibtex
+@article{optigradtrust2025,
+  title={OptiGradTrust: Byzantine-Robust Federated Learning with Multi-Feature Gradient Analysis and Reinforcement Learning-Based Trust Weighting},
+  author={Mohammad Karami, Fatemeh Ghassemi, Hamed Kebriaei, Hamid Azadegan},
+  year={2025},
+  keywords={Federated Learning, Byzantine Attacks, Reinforcement Learning, Non-IID Distribution, Medical Applications, Gradient Fingerprinting, Trust Weighting, Robust Aggregation}
+}
+```
 
 ### Key Research Contributions
 
 **OptiGradTrust** introduces several novel contributions to Byzantine-robust federated learning:
 
-1. **Six-Dimensional Gradient Fingerprinting**: First comprehensive gradient analysis framework combining VAE reconstruction, cosine similarity, L2 norm, sign-consistency, and Monte Carlo Shapley values.
+1. **Six-Dimensional Gradient Fingerprinting**: First comprehensive gradient analysis framework combining VAE reconstruction (encoder [512,256,128], latent 64), cosine similarity, L2 norm, sign-consistency, and Monte Carlo Shapley values (100 permutations).
 
-2. **Hybrid RL-Attention Module**: Novel integration of reinforcement learning with transformer-based attention for adaptive trust scoring.
+2. **Hybrid RL-Attention Module**: Novel integration of reinforcement learning (Double Deep Q-Network) with transformer-based attention (8 heads, 256 dimensions) for adaptive trust scoring.
 
-3. **FedBN-Prox (FedBN-P)**: Innovative combination of Federated Batch Normalization with proximal regularization for optimal convergence under data heterogeneity.
+3. **FedBN-Prox (FedBN-P)**: Innovative combination of Federated Batch Normalization with proximal regularization (μ=0.01) for optimal convergence under data heterogeneity, achieving 26-round convergence vs 30 for FedBN.
 
-4. **Progressive Learning in Medical FL**: First documented phenomenon of adaptive improvement in Byzantine detection capabilities specifically in medical federated learning scenarios.
+4. **Progressive Learning in Medical FL**: First documented phenomenon of adaptive improvement in Byzantine detection capabilities (42.86% → 75.00%) specifically in medical federated learning scenarios.
 
-5. **Multi-Domain Evaluation**: Comprehensive assessment across vision (MNIST), computer vision (CIFAR-10), and medical imaging (Alzheimer's MRI) domains.
+5. **Multi-Domain Evaluation**: Comprehensive assessment across vision (MNIST 99.41%), computer vision (CIFAR-10 82.44%), and medical imaging (Alzheimer's MRI 96.61%) domains.
+
+6. **Superior State-of-the-Art Performance**: +1.59pp over FLGuard on MNIST, +1.74pp on CIFAR-10, +1.59pp on Alzheimer MRI under heterogeneous conditions.
 
 ## Contributing
 
@@ -518,6 +546,11 @@ python -m memory_profiler main.py
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
+## Acknowledgments
+
+- PyTorch team for the deep learning framework
+- Federated learning research community
+- Contributors to the attention mechanism literature
 
 ## Contact
 
@@ -533,11 +566,13 @@ For questions, issues, or collaboration opportunities regarding OptiGradTrust:
 **Status**: ✅ **OptiGradTrust fully implemented and tested** across multiple domains and attack scenarios.
 
 **Performance Achievements**:
-- 🎯 **+1.6pp improvement** over FLGuard under non-IID conditions
-- 🏥 **Progressive learning** documented in medical federated learning
-- 🛡️ **Superior Byzantine robustness** compared to state-of-the-art methods
-- 📊 **Multi-domain validation** across vision, computer vision, and medical imaging
+- 🎯 **+1.59pp improvement** over FLGuard on MNIST, **+1.74pp** on CIFAR-10, **+1.59pp** on Alzheimer MRI under heterogeneous conditions
+- 🏥 **Progressive learning** documented in medical federated learning (42.86% → 75.00% detection improvement)
+- 🛡️ **Superior Byzantine robustness** compared to state-of-the-art methods (FLTrust, FLGuard, FLAME)
+- 📊 **Multi-domain validation** across vision (MNIST 99.41%), computer vision (CIFAR-10 82.44%), and medical imaging (Alzheimer's MRI 96.61%)
+- ⚡ **FedBN-Prox optimization** achieving 26-round convergence vs 30 for FedBN
 
 **Last Updated**: August 2025  
 **Version**: 3.0.0 - OptiGradTrust Release  
-**Paper Status**: Ready for Journal Submission 
+**Paper Status**: Under Review  
+**Authors**: Mohammad Karami, Fatemeh Ghassemi, Hamed Kebriaei, Hamid Azadegan 
