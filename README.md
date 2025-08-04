@@ -485,23 +485,6 @@ print('Model loaded successfully')
 python -m memory_profiler main.py
 ```
 
-## Citation
-
-If you use OptiGradTrust in your research, please cite:
-
-```bibtex
-@article{optigradtrust2024,
-  title={OptiGradTrust: Byzantine-Robust Federated Learning with Multi-Feature Gradient Analysis and Reinforcement Learning-Based Trust Weighting},
-  author={[Your Name]},
-  journal={[Journal Name]},
-  year={2024},
-  volume={[Volume]},
-  pages={[Pages]},
-  doi={[DOI]},
-  url={[Repository URL]},
-  keywords={Federated Learning, Byzantine Attacks, Reinforcement Learning, Non-IID Distribution, Medical Applications, Gradient Fingerprinting, Trust Weighting, Robust Aggregation}
-}
-```
 
 ### Key Research Contributions
 
@@ -535,11 +518,6 @@ If you use OptiGradTrust in your research, please cite:
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
-
-- PyTorch team for the deep learning framework
-- Federated learning research community
-- Contributors to the attention mechanism literature
 
 ## Contact
 
