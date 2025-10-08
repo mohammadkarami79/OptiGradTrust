@@ -48,10 +48,10 @@ class AblationServer(Server):
         self.disabled_features = disabled_features or []
         print(f"🔬 Ablation Mode: Disabled features = {self.disabled_features}")
     
-    def _compute_gradient_features(self, gradient):
+    def _compute_gradient_features(self, gradient, root_gradient=None, skip_client_sim=False):
         """Override to disable specific features."""
-        # Call original implementation
-        features = super()._compute_gradient_features(gradient)
+        # Call original implementation with all parameters
+        features = super()._compute_gradient_features(gradient, root_gradient, skip_client_sim)
         
         # Feature indices: [vae, cos_ref, cos_peer, l2, sign, shapley]
         feature_map = {
