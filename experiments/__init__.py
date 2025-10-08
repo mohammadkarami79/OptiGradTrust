@@ -16,6 +16,7 @@ from . import computational_overhead
 from . import confidence_intervals
 from . import extended_metrics
 from . import fair_comparison
+from . import optimizer_ablation
 from . import scalability_tests
 from . import feature_correlation
 from . import extreme_heterogeneity
@@ -30,6 +31,7 @@ __all__ = [
     'confidence_intervals',
     'extended_metrics',
     'fair_comparison',
+    'optimizer_ablation',
     'scalability_tests',
     'feature_correlation',
     'extreme_heterogeneity',

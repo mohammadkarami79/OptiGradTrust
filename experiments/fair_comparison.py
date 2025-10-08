@@ -2,16 +2,16 @@
 Fair Comparison Module
 =======================
 
-Compares OptiGradTrust against baselines (FLGuard, FLTrust, FLAME) when ALL use FedBN-P.
-Addresses Reviewer 2's concern about unfair advantage.
+Compares OptiGradTrust against baselines with THEIR ORIGINAL optimizers.
+Each method uses the optimizer from their original papers.
 
 Tests:
-- OptiGradTrust (FedBN-P) 
-- FLGuard (FedBN-P)
-- FLTrust (FedBN-P)
-- FLAME (FedBN-P)
+- OptiGradTrust (FedBN-P) - our contribution
+- FLGuard (FedAvg) - as in original paper
+- FLTrust (FedAvg) - as in original paper
+- FLAME (FedAvg) - as in original paper
 
-All with identical hyperparameters and optimizer.
+This is the FAIR comparison - each method with its original configuration.
 """
 
 import torch
