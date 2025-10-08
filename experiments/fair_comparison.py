@@ -30,14 +30,6 @@ from federated_learning.training.client import Client
 from federated_learning.data.dataset_utils import load_dataset, create_client_datasets
 from federated_learning.utils.model_utils import set_random_seeds
 
-# Import baseline aggregators (we'll use simplified versions)
-from federated_learning.training.aggregators import (
-    federated_averaging,
-    krum_aggregation,
-    trimmed_mean_aggregation,
-    median_aggregation
-)
-
 
 class FLGuardServer(Server):
     """FLGuard with FedBN-P."""
