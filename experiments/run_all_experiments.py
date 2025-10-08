@@ -6,22 +6,23 @@ This master script runs ALL experiments required to address reviewer feedback:
 
 CRITICAL EXPERIMENTS (Priority 1):
 1. Ablation Study - Drop-one-feature analysis
-2. Computational Overhead - Runtime & memory profiling
-3. Fair Comparison - Baselines with FedBN-P
-4. Extended Metrics - Precision, Recall, F1, AUC, Confusion Matrix
-5. Confidence Intervals - Multiple runs with different seeds
+2. Optimizer Ablation - FedBN-P contribution (OptiGradTrust with different optimizers)
+3. Computational Overhead - Runtime & memory profiling
+4. Fair Comparison - Baselines with their original optimizers
+5. Extended Metrics - Precision, Recall, F1, AUC, Confusion Matrix
+6. Confidence Intervals - Multiple runs with different seeds
 
 IMPORTANT EXPERIMENTS (Priority 2):
-6. Combined Attacks - Multiple simultaneous attacks
-7. Scalability Analysis - Varying number of clients
-8. Adversarial Ratios - Different percentages of malicious clients
-9. Feature Correlation - Independence analysis
-10. Extreme Heterogeneity - α=0.05, 0.01
+7. Combined Attacks - Multiple simultaneous attacks
+8. Scalability Analysis - Varying number of clients
+9. Adversarial Ratios - Different percentages of malicious clients
+10. Feature Correlation - Independence analysis
+11. Extreme Heterogeneity - α=0.05, 0.01
 
 ADDITIONAL ANALYSES (Priority 3):
-11. Preprocessing Documentation
-12. Statistical Significance Tests
-13. Comprehensive Visualizations
+12. Preprocessing Documentation
+13. Statistical Significance Tests
+14. Comprehensive Visualizations
 
 Usage:
     python experiments/run_all_experiments.py --all
@@ -44,6 +45,7 @@ sys.path.insert(0, str(project_root))
 # Import experiment modules (will create these)
 from experiments import (
     ablation_study,
+    optimizer_ablation,
     combined_attacks,
     computational_overhead,
     confidence_intervals,
@@ -122,14 +124,22 @@ class ExperimentRunner:
         print("PRIORITY 1: CRITICAL EXPERIMENTS")
         print("🎯"*40 + "\n")
         
-        # 1. Ablation Study
+        # 1. Ablation Study (Features)
         self.run_experiment(
             "Ablation Study",
             ablation_study.run_ablation_analysis,
             features_to_test=['vae', 'cosine_ref', 'cosine_peer', 'l2_norm', 'sign_consistency', 'shapley']
         )
         
-        # 2. Computational Overhead
+        # 2. Optimizer Ablation (FedBN-P contribution)
+        self.run_experiment(
+            "Optimizer Ablation",
+            optimizer_ablation.run_optimizer_ablation,
+            optimizers=['FedAvg', 'FedProx', 'FedBN', 'FedBN-P'],
+            num_rounds=25
+        )
+        
+        # 3. Computational Overhead
         self.run_experiment(
             "Computational Overhead",
             computational_overhead.profile_overhead,
@@ -137,21 +147,21 @@ class ExperimentRunner:
             profile_time=True
         )
         
-        # 3. Fair Comparison
+        # 4. Fair Comparison
         self.run_experiment(
-            "Fair Comparison with FedBN-P",
+            "Fair Comparison with Baselines",
             fair_comparison.run_fair_comparison,
             baselines=['FLGuard', 'FLTrust', 'FLAME']
         )
         
-        # 4. Extended Metrics
+        # 5. Extended Metrics
         self.run_experiment(
             "Extended Metrics",
             extended_metrics.compute_extended_metrics,
             metrics=['precision', 'recall', 'f1', 'auc', 'confusion_matrix']
         )
         
-        # 5. Confidence Intervals
+        # 6. Confidence Intervals
         self.run_experiment(
             "Confidence Intervals",
             confidence_intervals.run_multiple_seeds,

@@ -64,7 +64,7 @@
 |---|---------|-------|----------|--------|
 | 1 | **Attacks isolated vs combined?** | ✅ **Combined attacks test** | `combined_attacks.py` | ✅ Done |
 | 2 | **Limits با different adversarial ratios** | ✅ **10%-50% ratios** | `scalability_tests.py` | ✅ Done |
-| 3 | **Unfair advantage: OptiGradTrust با FedBN-P, baselines با FedAvg** | ✅ **Fair comparison - همه با FedBN-P** | `fair_comparison.py` | ✅ Done |
+| 3 | **Unfair advantage: OptiGradTrust با FedBN-P, baselines با FedAvg** | ✅ **Fair comparison اصلاح شد - baselines با optimizer اصلی + Optimizer Ablation برای سهم FedBN-P** | `fair_comparison.py` + `optimizer_ablation.py` | ✅ Done |
 | 4 | **فقط 10 clients?** | ✅ **10, 20, 50, 100 clients** | `scalability_tests.py` | ✅ Done |
 | 5 | **Real world datasets با invalid/incomplete data** | ⚠️ Kaggle Alzheimer dataset هم نویز دارد. در Discussion توضیح می‌دهیم | Paper - Discussion | ⏳ Paper Update |
 
@@ -582,4 +582,36 @@ experiments/results/session_20251008_HHMMSS/
 **تاریخ تکمیل:** ۱۷ مهر ۱۴۰۴  
 **مدت زمان implementation:** ~4 ساعت  
 **وضعیت:** ✅ **COMPLETE & READY**
+
+---
+
+## 🔄 به‌روزرسانی ۱۷ مهر - بعد از Quick Test
+
+### ✅ تغییرات جدید:
+
+1. **Optimizer Ablation Study کامل شد** (`experiments/optimizer_ablation.py`):
+   - ✅ کلاس `OptimizerServer` با aggregation method قابل تنظیم
+   - ✅ تست OptiGradTrust با 4 optimizer: FedAvg, FedProx, FedBN, FedBN-P
+   - ✅ نمایش سهم FedBN-P در عملکرد نهایی
+   - ✅ همه تست‌ها با trust mechanism فعال (fair comparison)
+
+2. **اصلاح Fair Comparison**:
+   - ✅ Baselines با optimizer اصلی خود (FedAvg) اجرا می‌شوند
+   - ✅ OptiGradTrust با FedBN-P اجرا می‌شود
+   - ✅ Optimizer Ablation سهم FedBN-P را جدا نشان می‌دهد
+
+3. **به‌روزرسانی Master Script**:
+   - ✅ افزودن Optimizer Ablation به Priority 1
+   - ✅ به‌روزرسانی documentation
+
+### 📊 نتایج Quick Test:
+- ✅ اجرا موفق: 52 دقیقه
+- ✅ 2 feature test شد (VAE, Shapley)
+- ⏳ برای نتایج معنی‌دار نیاز به اجرای کامل با rounds بیشتر
+
+### 📝 مستندات جدید:
+- ✅ `IMPLEMENTATION_STATUS.md` - گزارش کامل وضعیت
+- ✅ `DONE.md` به‌روز شد
+
+**وضعیت نهایی:** آماده برای اجرای کامل روی سرور ✅
 

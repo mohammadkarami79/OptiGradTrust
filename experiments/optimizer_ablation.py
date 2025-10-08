@@ -30,6 +30,38 @@ from federated_learning.data.dataset_utils import load_dataset, create_client_da
 from federated_learning.utils.model_utils import set_random_seeds
 
 
+class OptimizerServer(Server):
+    """Server with configurable optimizer/aggregation method."""
+    
+    def __init__(self, aggregation_method='fedbn_fedprox'):
+        super().__init__()
+        self.aggregation_method = aggregation_method
+    
+    def _aggregate_gradients(self, client_gradients, client_weights=None):
+        """Override to use specific aggregation method."""
+        from federated_learning.training.aggregators import (
+            FedAvgAggregator, 
+            FedProxAggregator, 
+            FedBnAggregator,
+            FedBnFedProxAggregator
+        )
+        
+        # Select aggregator based on method
+        aggregator_map = {
+            'fedavg': FedAvgAggregator(),
+            'fedprox': FedProxAggregator(),
+            'fedbn': FedBnAggregator(),
+            'fedbn_fedprox': FedBnFedProxAggregator()
+        }
+        
+        aggregator = aggregator_map.get(self.aggregation_method.lower(), FedBnFedProxAggregator())
+        
+        # Use the aggregator
+        aggregated_gradient = aggregator.aggregate_gradients(client_gradients, client_weights)
+        
+        return aggregated_gradient
+
+
 def run_optimizer_experiment(optimizer_name, output_dir, num_rounds=25):
     """Run OptiGradTrust with specific optimizer."""
     
@@ -39,14 +71,25 @@ def run_optimizer_experiment(optimizer_name, output_dir, num_rounds=25):
     
     set_random_seeds(42)
     
-    # Note: در implementation واقعی باید optimizer را تغییر دهیم
-    # فعلاً همه با FedBN-P اجرا می‌شوند
-    # این فقط یک placeholder است
+    # Map optimizer names to aggregation methods
+    optimizer_map = {
+        'FedAvg': 'fedavg',
+        'FedProx': 'fedprox',
+        'FedBN': 'fedbn',
+        'FedBN-P': 'fedbn_fedprox'
+    }
+    
+    aggregation_method = optimizer_map.get(optimizer_name, 'fedbn_fedprox')
+    
+    print(f"📌 Using aggregation method: {aggregation_method}")
+    print(f"📌 Trust mechanism: ACTIVE (OptiGradTrust framework)")
+    print(f"📌 This shows the contribution of {optimizer_name} within OptiGradTrust\n")
     
     root_dataset, test_dataset = load_dataset()
     root_loader = torch.utils.data.DataLoader(root_dataset, batch_size=BATCH_SIZE, shuffle=True, num_workers=0)
     
-    server = Server()
+    # Use custom server with specific aggregation method
+    server = OptimizerServer(aggregation_method=aggregation_method)
     server.set_datasets(root_loader, test_dataset)
     server._pretrain_global_model()
     
@@ -70,15 +113,19 @@ def run_optimizer_experiment(optimizer_name, output_dir, num_rounds=25):
     num_malicious = int(NUM_CLIENTS * 0.3)
     malicious_indices = np.random.choice(NUM_CLIENTS, num_malicious, replace=False)
     
+    print(f"🎯 Malicious clients: {list(malicious_indices)}")
+    
     for i in malicious_indices:
         clients[i].is_malicious = True
         clients[i].set_attack_parameters(attack_type='scaling_attack', scaling_factor=10.0)
     
     # Train VAE
+    print(f"\n🔧 Training VAE...")
     root_gradients = server._collect_root_gradients()
     server.vae = server.train_vae(root_gradients, vae_epochs=VAE_EPOCHS)
     
     # Train
+    print(f"\n🚀 Starting federated training with {optimizer_name}...")
     training_errors, round_metrics = server.train(num_rounds=num_rounds)
     
     final_accuracy = server.evaluate_model()
@@ -100,15 +147,25 @@ def run_optimizer_experiment(optimizer_name, output_dir, num_rounds=25):
     
     result = {
         'optimizer': optimizer_name,
+        'aggregation_method': aggregation_method,
         'initial_accuracy': initial_accuracy,
         'final_accuracy': final_accuracy,
         'improvement': improvement,
+        'detection_precision': precision,
+        'detection_recall': recall,
         'detection_f1': f1_score,
+        'true_positives': total_tp,
+        'false_positives': total_fp,
+        'false_negatives': total_fn,
+        'malicious_indices': malicious_indices.tolist(),
+        'num_rounds': num_rounds,
         'timestamp': datetime.now().isoformat()
     }
     
-    print(f"  Final Accuracy: {final_accuracy:.4f}")
-    print(f"  Improvement: {improvement:.4f}")
+    print(f"\n✅ Results:")
+    print(f"   Final Accuracy: {final_accuracy:.4f}")
+    print(f"   Improvement: {improvement:.4f}")
+    print(f"   Detection F1: {f1_score:.4f}")
     
     return result
 
@@ -136,13 +193,17 @@ def run_optimizer_ablation(output_dir, optimizers=None, num_rounds=25):
     if optimizers is None:
         optimizers = ['FedAvg', 'FedProx', 'FedBN', 'FedBN-P']
     
-    print(f"⚠️  NOTE: This is a placeholder implementation!")
-    print(f"   Currently all use FedBN-P (requires config changes for different optimizers)")
-    print(f"   For paper, you'll need to manually test with different configs.\n")
+    print(f"📝 Testing {len(optimizers)} optimizers: {', '.join(optimizers)}")
+    print(f"🎯 Each test uses OptiGradTrust framework (trust mechanism active)")
+    print(f"📊 This shows the specific contribution of each optimizer within OptiGradTrust\n")
     
     results = []
     
-    for optimizer in optimizers:
+    for i, optimizer in enumerate(optimizers, 1):
+        print(f"\n{'='*80}")
+        print(f"Testing {i}/{len(optimizers)}: {optimizer}")
+        print(f"{'='*80}")
+        
         result = run_optimizer_experiment(
             optimizer_name=optimizer,
             output_dir=output_dir,
@@ -158,8 +219,23 @@ def run_optimizer_ablation(output_dir, optimizers=None, num_rounds=25):
     print(f"{'Optimizer':<15} {'Accuracy':<12} {'Improvement':<15} {'Detection F1':<12}")
     print(f"{'-'*80}")
     
+    baseline_acc = None
     for r in results:
         print(f"{r['optimizer']:<15} {r['final_accuracy']:<12.4f} {r['improvement']:<15.4f} {r['detection_f1']:<12.4f}")
+        if r['optimizer'] == 'FedBN-P':
+            baseline_acc = r['final_accuracy']
+    
+    # Show contribution of FedBN-P
+    if baseline_acc is not None:
+        print(f"\n{'='*80}")
+        print(f"📈 FedBN-P CONTRIBUTION ANALYSIS")
+        print(f"{'='*80}\n")
+        
+        for r in results:
+            if r['optimizer'] != 'FedBN-P':
+                diff = baseline_acc - r['final_accuracy']
+                pct = (diff / r['final_accuracy']) * 100 if r['final_accuracy'] > 0 else 0
+                print(f"  FedBN-P vs {r['optimizer']:<10}: +{diff:.4f} ({pct:+.2f}%)")
     
     # Save
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
@@ -167,7 +243,11 @@ def run_optimizer_ablation(output_dir, optimizers=None, num_rounds=25):
     output_data = {
         'optimizers': optimizers,
         'results': results,
-        'note': 'Placeholder - requires manual config changes for different optimizers',
+        'note': 'OptiGradTrust with different optimizers - all using trust mechanism',
+        'contribution_analysis': {
+            'baseline_optimizer': 'FedBN-P',
+            'baseline_accuracy': baseline_acc
+        },
         'timestamp': datetime.now().isoformat()
     }
     
@@ -184,11 +264,10 @@ def run_optimizer_ablation(output_dir, optimizers=None, num_rounds=25):
     print(f"📁 Results: {results_file}")
     print(f"📊 CSV: {csv_file}")
     
-    print(f"\n⚠️  IMPORTANT: This is a placeholder!")
-    print(f"   To get real results, you need to:")
-    print(f"   1. Modify config.py to use different optimizers")
-    print(f"   2. Run this experiment multiple times")
-    print(f"   3. Or use the existing optimizer comparison from Fig. 4 in paper")
+    print(f"\n💡 KEY INSIGHT:")
+    print(f"   This experiment shows how different optimizers perform")
+    print(f"   WITHIN the OptiGradTrust framework (trust mechanism active).")
+    print(f"   The difference shows FedBN-P's specific contribution.")
     
     return {
         'results_file': str(results_file),
