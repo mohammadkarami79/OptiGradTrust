@@ -140,13 +140,13 @@ class EnhancedAblationServer(Server):
             print("⚠️  RL disabled - using Dual Attention for aggregation")
             
             # استفاده از dual attention به جای RL
-            from federated_learning.models.dual_attention import DualAttention
+            from federated_learning.models.attention import DualAttention
             
             # محاسبه trust scores با dual attention
             attention_model = DualAttention(
-                input_dim=features.shape[1],
-                hidden_dim=config.DUAL_ATTENTION_HIDDEN_DIM,
-                num_heads=config.DUAL_ATTENTION_NUM_HEADS
+                feature_dim=features.shape[1],
+                hidden_dim=getattr(config, 'DUAL_ATTENTION_HIDDEN_DIM', 64),
+                num_heads=getattr(config, 'DUAL_ATTENTION_NUM_HEADS', 4)
             ).to(self.device)
             
             # تنظیم به evaluation mode
@@ -178,7 +178,7 @@ class EnhancedAblationServer(Server):
             if AGGREGATION_METHOD == 'fedbn':
                 return self._aggregate_fedbn(gradients, weights)
             elif AGGREGATION_METHOD == 'fedprox':
-                return self._aggregate_fedavg(gradients, weights)
+                return self._aggregate_fedprox(gradients, weights)
             else:
                 return self._aggregate_fedavg(gradients, weights)
         
