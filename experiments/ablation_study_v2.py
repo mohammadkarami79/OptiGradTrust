@@ -132,6 +132,60 @@ class EnhancedAblationServer(Server):
         
         return features
     
+    def _aggregate_rl(self, gradients, features, client_indices):
+        """
+        Override _aggregate_rl: اگر RL disabled باشد، از Dual Attention استفاده می‌کند.
+        """
+        if self.disable_rl:
+            print("⚠️  RL disabled - using Dual Attention for aggregation")
+            
+            # استفاده از dual attention به جای RL
+            from federated_learning.models.dual_attention import DualAttention
+            
+            # محاسبه trust scores با dual attention
+            attention_model = DualAttention(
+                input_dim=features.shape[1],
+                hidden_dim=config.DUAL_ATTENTION_HIDDEN_DIM,
+                num_heads=config.DUAL_ATTENTION_NUM_HEADS
+            ).to(self.device)
+            
+            # تنظیم به evaluation mode
+            attention_model.eval()
+            
+            with torch.no_grad():
+                # محاسبه trust scores
+                trust_scores, malicious_scores, confidence_scores = attention_model(features)
+                
+                # نرمالسازی weights
+                weights = trust_scores / trust_scores.sum()
+            
+            # ذخیره برای logging
+            self.weights = weights
+            self.trust_scores = trust_scores
+            self.confidence_scores = confidence_scores
+            
+            # لاگ کردن weights
+            print("\nDual Attention Aggregation Weights:")
+            for i, client_idx in enumerate(client_indices):
+                client = self.clients[client_idx]
+                is_malicious = "YES" if client.is_malicious else "NO"
+                weight = weights[i].item()
+                print(f"Client {client_idx} (Malicious: {is_malicious}): Weight = {weight:.4f}")
+            
+            # استفاده از base aggregation method
+            from federated_learning.config.config import AGGREGATION_METHOD
+            
+            if AGGREGATION_METHOD == 'fedbn':
+                return self._aggregate_fedbn(gradients, weights)
+            elif AGGREGATION_METHOD == 'fedprox':
+                return self._aggregate_fedavg(gradients, weights)
+            else:
+                return self._aggregate_fedavg(gradients, weights)
+        
+        else:
+            # RL فعال است - استفاده نرمال
+            return super()._aggregate_rl(gradients, features, client_indices)
+    
     def _aggregate_with_trust(self, gradients, features, client_indices):
         """Override: استفاده از RL یا Dual Attention بر اساس config."""
         
@@ -143,16 +197,8 @@ class EnhancedAblationServer(Server):
         
         elif self.disable_rl:
             print("⚠️  RL disabled - using only Dual Attention")
-            # فقط از dual attention استفاده می‌کنیم
-            # تغییر موقت config
-            original_method = config.GRADIENT_COMBINATION_METHOD
-            config.GRADIENT_COMBINATION_METHOD = 'dual_attention'
-            
-            result = super()._aggregate_with_trust(gradients, features, client_indices)
-            
-            # بازگرداندن config
-            config.GRADIENT_COMBINATION_METHOD = original_method
-            return result
+            # این الان در _aggregate_rl handle می‌شود
+            return super()._aggregate_with_trust(gradients, features, client_indices)
         
         elif self.disable_dual_attention:
             print("⚠️  Dual Attention disabled - using only RL")
