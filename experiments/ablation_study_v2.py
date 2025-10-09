@@ -154,7 +154,11 @@ class EnhancedAblationServer(Server):
             
             with torch.no_grad():
                 # محاسبه trust scores
-                trust_scores, malicious_scores, confidence_scores = attention_model(features)
+                # DualAttention returns (malicious_scores, confidence_scores)
+                malicious_scores, confidence_scores = attention_model(features)
+                
+                # trust_scores = 1 - malicious_scores
+                trust_scores = 1.0 - malicious_scores.squeeze()
                 
                 # نرمالسازی weights
                 weights = trust_scores / trust_scores.sum()
