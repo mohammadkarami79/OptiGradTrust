@@ -30,10 +30,10 @@ def set_seed(seed):
 
 def main():
     print("\n" + "="*80)
-    print("🔥 COMBINED UNSEEN ATTACKS TEST - The Real Challenge!")
+    print("COMBINED UNSEEN ATTACKS TEST - The Real Challenge!")
     print("="*80)
     
-    print("\n💡 Strategy:")
+    print("\nStrategy:")
     print("  - Use COMBINED attacks (2 attacks at once)")
     print("  - This creates complex, unpredictable patterns")
     print("  - RL must adapt to MULTIPLE threats simultaneously")
@@ -50,13 +50,13 @@ def main():
         'targeted_attack'  # + gradient_inversion در background
     ]
     
-    print(f"\n📝 Test Configuration:")
+    print(f"\n[Test Configuration]")
     print(f"  Dataset: Alzheimer MRI")
     print(f"  Rounds: {num_rounds} (enough for RL learning)")
     print(f"  Attack Intensity: {attack_intensity} (BALANCED)")
     print(f"  Malicious Ratio: {malicious_ratio} (50%)")
     print(f"  Attack Types: {combined_unseen_attacks}")
-    print(f"  → These are COMBINED unseen attacks!")
+    print(f"  -> These are COMBINED unseen attacks!")
     
     results = {}
     
@@ -64,7 +64,7 @@ def main():
     # Test 1: Baseline (RL) با COMBINED UNSEEN attacks
     # =====================================================================
     print("\n" + "="*80)
-    print("📊 Test 1: Baseline (RL + Dual Attention) - COMBINED Attacks")
+    print("[Test 1] Baseline (RL + Dual Attention) - COMBINED Attacks")
     print("  RL should LEARN to handle these complex combinations!")
     print("="*80)
     
@@ -84,7 +84,7 @@ def main():
     )
     results['baseline_rl_combined'] = result_baseline
     
-    print("\n✅ Baseline with RL completed!")
+    print("\n[OK] Baseline with RL completed!")
     print(f"   Final Accuracy: {result_baseline['final_accuracy']:.4f}")
     print(f"   Detection F1: {result_baseline['detection_f1']:.4f}")
     
@@ -92,7 +92,7 @@ def main():
     # Test 2: Without RL با COMBINED UNSEEN attacks
     # =====================================================================
     print("\n" + "="*80)
-    print("📊 Test 2: Without RL (Only Dual Attention) - COMBINED Attacks")
+    print("[Test 2] Without RL (Only Dual Attention) - COMBINED Attacks")
     print("  Dual Attention is FIXED - struggles with combinations!")
     print("="*80)
     
@@ -112,7 +112,7 @@ def main():
     )
     results['no_rl_combined'] = result_no_rl
     
-    print("\n✅ Without RL completed!")
+    print("\n[OK] Without RL completed!")
     print(f"   Final Accuracy: {result_no_rl['final_accuracy']:.4f}")
     print(f"   Detection F1: {result_no_rl['detection_f1']:.4f}")
     
@@ -120,7 +120,7 @@ def main():
     # نتایج و تحلیل
     # =====================================================================
     print("\n" + "="*80)
-    print("📊 COMPREHENSIVE RESULTS - COMBINED ATTACKS")
+    print("[RESULTS] COMPREHENSIVE RESULTS - COMBINED ATTACKS")
     print("="*80)
     
     print(f"\nBaseline (with RL):")
@@ -140,83 +140,83 @@ def main():
     f1_diff = results['baseline_rl_combined']['detection_f1'] - results['no_rl_combined']['detection_f1']
     
     print("\n" + "="*80)
-    print("📈 DETAILED ANALYSIS - COMBINED ATTACKS")
+    print("[ANALYSIS] DETAILED ANALYSIS - COMBINED ATTACKS")
     print("="*80)
     
-    print(f"\n🎯 Accuracy Comparison:")
+    print(f"\n[Accuracy Comparison]")
     print(f"  Baseline (RL):      {results['baseline_rl_combined']['final_accuracy']:.4f}")
     print(f"  Without RL:         {results['no_rl_combined']['final_accuracy']:.4f}")
     print(f"  Difference:         {acc_diff:+.4f}")
     if acc_diff > 0.02:
-        print(f"  → RL is BETTER by {acc_diff:.4f} ✅")
+        print(f"  -> RL is BETTER by {acc_diff:.4f}")
     elif acc_diff < -0.02:
-        print(f"  → Dual Attention is better by {abs(acc_diff):.4f} ⚠️")
+        print(f"  -> Dual Attention is better by {abs(acc_diff):.4f}")
     else:
-        print(f"  → Similar performance")
+        print(f"  -> Similar performance")
     
-    print(f"\n🎯 Detection F1 Comparison:")
+    print(f"\n[Detection F1 Comparison]")
     print(f"  Baseline (RL):      {results['baseline_rl_combined']['detection_f1']:.4f}")
     print(f"  Without RL:         {results['no_rl_combined']['detection_f1']:.4f}")
     print(f"  Difference:         {f1_diff:+.4f}")
     if f1_diff > 0.05:
-        print(f"  → RL is BETTER by {f1_diff:.4f} ✅")
+        print(f"  -> RL is BETTER by {f1_diff:.4f}")
     elif f1_diff < -0.05:
-        print(f"  → Dual Attention is better by {abs(f1_diff):.4f} ⚠️")
+        print(f"  -> Dual Attention is better by {abs(f1_diff):.4f}")
     else:
-        print(f"  → Similar performance")
+        print(f"  -> Similar performance")
     
     # تفسیر
     print("\n" + "="*80)
-    print("🔍 INTERPRETATION")
+    print("[INTERPRETATION]")
     print("="*80)
     
     if acc_diff > 0.02 or f1_diff > 0.05:
-        print("\n✅ SUCCESS! RL shows advantage on COMBINED attacks!")
+        print("\n[SUCCESS] RL shows advantage on COMBINED attacks!")
         print(f"   Accuracy improvement: {acc_diff:.4f}")
         print(f"   F1 improvement: {f1_diff:.4f}")
-        print("\n💡 Key Finding:")
-        print("   → RL adapts to complex multi-attack scenarios")
-        print("   → Dual Attention struggles with unseen combinations")
-        print("   → This validates RL's adaptive capability!")
+        print("\n[Key Finding]")
+        print("   -> RL adapts to complex multi-attack scenarios")
+        print("   -> Dual Attention struggles with unseen combinations")
+        print("   -> This validates RL's adaptive capability!")
         
     elif acc_diff > 0.01 or f1_diff > 0.02:
-        print("\n⚠️  RL shows MODERATE advantage")
+        print("\n[MODERATE] RL shows MODERATE advantage")
         print(f"   Accuracy improvement: {acc_diff:.4f}")
         print(f"   F1 improvement: {f1_diff:.4f}")
-        print("\n💡 Key Finding:")
-        print("   → RL provides some benefit on complex scenarios")
-        print("   → But advantage is not as strong as hoped")
+        print("\n[Key Finding]")
+        print("   -> RL provides some benefit on complex scenarios")
+        print("   -> But advantage is not as strong as hoped")
         
     else:
-        print("\n❌ Similar performance - RL does not show clear advantage")
+        print("\n[SIMILAR] Similar performance - RL does not show clear advantage")
         print(f"   Accuracy difference: {acc_diff:.4f}")
         print(f"   F1 difference: {f1_diff:.4f}")
-        print("\n🤔 Possible reasons:")
+        print("\n[Possible reasons]")
         print("   1. Dual Attention generalizes very well")
         print("   2. Need even more complex scenarios")
         print("   3. Need higher malicious ratio (0.7)")
     
     # توصیه‌های بعدی
     print("\n" + "="*80)
-    print("💡 NEXT STEPS")
+    print("[NEXT STEPS]")
     print("="*80)
     
     if acc_diff > 0.02 or f1_diff > 0.05:
-        print("\n✨ Great results! For the paper:")
+        print("\n[Great results! For the paper:]")
         print("  1. Report RL's advantage on complex scenarios")
         print("  2. Emphasize adaptive capability")
         print("  3. Compare: simple vs combined attacks")
         
     else:
-        print("\n📌 To strengthen results:")
+        print("\n[To strengthen results:]")
         print("  1. Try 70% malicious ratio")
         print("  2. Try 100-150 rounds")
         print("  3. Try extreme intensity (but balanced)")
         print("  4. Or accept: Dual Attention is very strong!")
     
     print("\n" + "="*80)
-    print(f"⏱  Combined Attacks Test completed!")
-    print(f"📁 Results saved in: experiments/results/")
+    print(f"[COMPLETED] Combined Attacks Test completed!")
+    print(f"[SAVED] Results saved in: experiments/results/")
     print("="*80)
     
     # ذخیره نتایج
@@ -250,7 +250,7 @@ def main():
             }
         }, f, indent=2)
     
-    print(f"\n💾 Results saved to: {output_file}")
+    print(f"\n[SAVED] Results saved to: {output_file}")
 
 if __name__ == '__main__':
     main()
