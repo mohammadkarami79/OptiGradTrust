@@ -65,24 +65,24 @@ class EnhancedAblationServer(Server):
         self.disable_dual_attention = disable_dual_attention
         
         print(f"\n{'='*80}")
-        print(f"🔬 Enhanced Ablation Configuration:")
+        print(f"[Enhanced Ablation Configuration]")
         print(f"{'='*80}")
         if disabled_features:
             print(f"  Disabled features: {disabled_features}")
         if disable_vae_training:
-            print(f"  ⚠️  VAE Training: DISABLED")
+            print(f"  [WARNING] VAE Training: DISABLED")
         if disable_shapley_computation:
-            print(f"  ⚠️  Shapley Computation: DISABLED")
+            print(f"  [WARNING] Shapley Computation: DISABLED")
         if disable_rl:
-            print(f"  ⚠️  RL-Attention: DISABLED (using only Dual Attention)")
+            print(f"  [WARNING] RL-Attention: DISABLED (using only Dual Attention)")
         if disable_dual_attention:
-            print(f"  ⚠️  Dual Attention: DISABLED (using only RL)")
+            print(f"  [WARNING] Dual Attention: DISABLED (using only RL)")
         print(f"{'='*80}\n")
     
     def train_vae(self, root_gradients, vae_epochs=50):
         """Override: اگر VAE disabled باشد، train نمی‌کند."""
         if self.disable_vae_training:
-            print("⚠️  Skipping VAE training (disabled)")
+            print("[WARNING] Skipping VAE training (disabled)")
             # یک VAE dummy برمی‌گردانیم
             from federated_learning.models.vae import GradientVAE
             vae = GradientVAE(
@@ -97,7 +97,7 @@ class EnhancedAblationServer(Server):
     def _compute_shapley_values(self, gradients, indices):
         """Override: اگر Shapley disabled باشد، محاسبه نمی‌کند."""
         if self.disable_shapley_computation:
-            print("⚠️  Skipping Shapley computation (disabled)")
+            print("[WARNING] Skipping Shapley computation (disabled)")
             # مقادیر neutral برمی‌گردانیم
             num_clients = len(gradients)
             return torch.ones(num_clients) * 0.5
@@ -137,7 +137,7 @@ class EnhancedAblationServer(Server):
         Override _aggregate_rl: اگر RL disabled باشد، از Dual Attention استفاده می‌کند.
         """
         if self.disable_rl:
-            print("⚠️  RL disabled - using Dual Attention for aggregation")
+            print("[WARNING] RL disabled - using Dual Attention for aggregation")
             
             # استفاده از dual attention به جای RL
             from federated_learning.models.attention import DualAttention
@@ -194,18 +194,18 @@ class EnhancedAblationServer(Server):
         """Override: استفاده از RL یا Dual Attention بر اساس config."""
         
         if self.disable_rl and self.disable_dual_attention:
-            print("⚠️  Both RL and Dual Attention disabled - using simple averaging")
+            print("[WARNING] Both RL and Dual Attention disabled - using simple averaging")
             # Simple FedAvg
             weights = torch.ones(len(gradients)) / len(gradients)
             return self._aggregate_fedavg(gradients, weights)
         
         elif self.disable_rl:
-            print("⚠️  RL disabled - using only Dual Attention")
+            print("[WARNING] RL disabled - using only Dual Attention")
             # این الان در _aggregate_rl handle می‌شود
             return super()._aggregate_with_trust(gradients, features, client_indices)
         
         elif self.disable_dual_attention:
-            print("⚠️  Dual Attention disabled - using only RL")
+            print("[WARNING] Dual Attention disabled - using only RL")
             # فقط از RL استفاده می‌کنیم
             return self._aggregate_rl(gradients, features, client_indices)
         
@@ -245,7 +245,7 @@ def run_enhanced_ablation_experiment(
     """
     
     print(f"\n{'='*80}")
-    print(f"🧪 EXPERIMENT: {config_name}")
+    print(f"[EXPERIMENT] {config_name}")
     print(f"{'='*80}")
     print(f"Rounds: {num_rounds}")
     print(f"Malicious Ratio: {malicious_ratio*100}%")
@@ -303,7 +303,7 @@ def run_enhanced_ablation_experiment(
     if attack_types is None:
         attack_types = ['scaling_attack']
     
-    print(f"🎯 Configuring {num_malicious} malicious clients:")
+    print(f"[TARGET] Configuring {num_malicious} malicious clients:")
     for i, mal_idx in enumerate(malicious_indices):
         # هر malicious client یک attack type متفاوت
         attack_type = attack_types[i % len(attack_types)]
@@ -368,7 +368,7 @@ def run_enhanced_ablation_experiment(
     }
     
     print(f"\n{'='*80}")
-    print(f"✅ {config_name} - Results:")
+    print(f"[OK] {config_name} - Results:")
     print(f"{'='*80}")
     print(f"  Final Accuracy: {final_accuracy:.4f}")
     print(f"  Improvement: {improvement:+.4f}")
@@ -415,7 +415,7 @@ def run_comprehensive_ablation_study(
     # 1. BASELINE (همه فعال، حملات ساده)
     # ==========================================
     print("\n" + "="*80)
-    print("1️⃣  BASELINE: All components active, simple attacks")
+    print("[1] BASELINE: All components active, simple attacks")
     print("="*80)
     
     results['baseline'] = run_enhanced_ablation_experiment(
@@ -429,7 +429,7 @@ def run_comprehensive_ablation_study(
     # 2. WITHOUT VAE
     # ==========================================
     print("\n" + "="*80)
-    print("2️⃣  WITHOUT VAE: VAE training disabled")
+    print("[2] WITHOUT VAE: VAE training disabled")
     print("="*80)
     
     results['without_vae'] = run_enhanced_ablation_experiment(
@@ -445,7 +445,7 @@ def run_comprehensive_ablation_study(
     # 3. WITHOUT SHAPLEY
     # ==========================================
     print("\n" + "="*80)
-    print("3️⃣  WITHOUT SHAPLEY: Shapley computation disabled")
+    print("[3] WITHOUT SHAPLEY: Shapley computation disabled")
     print("="*80)
     
     results['without_shapley'] = run_enhanced_ablation_experiment(
@@ -461,7 +461,7 @@ def run_comprehensive_ablation_study(
     # 4. WITHOUT RL (فقط Dual Attention)
     # ==========================================
     print("\n" + "="*80)
-    print("4️⃣  WITHOUT RL: Only Dual Attention (RL disabled)")
+    print("[4] WITHOUT RL: Only Dual Attention (RL disabled)")
     print("="*80)
     
     results['without_rl'] = run_enhanced_ablation_experiment(
@@ -476,7 +476,7 @@ def run_comprehensive_ablation_study(
     # 5. RL TEST با حملات UNSEEN
     # ==========================================
     print("\n" + "="*80)
-    print("5️⃣  RL TEST: Testing RL with unseen attacks")
+    print("[5] RL TEST: Testing RL with unseen attacks")
     print("="*80)
     
     results['rl_with_unseen_attacks'] = run_enhanced_ablation_experiment(
@@ -490,7 +490,7 @@ def run_comprehensive_ablation_study(
     # 6. WITHOUT DUAL ATTENTION (فقط RL)
     # ==========================================
     print("\n" + "="*80)
-    print("6️⃣  WITHOUT DUAL ATTENTION: Only RL (Dual Attention disabled)")
+    print("[6] WITHOUT DUAL ATTENTION: Only RL (Dual Attention disabled)")
     print("="*80)
     
     results['without_dual_attention'] = run_enhanced_ablation_experiment(
@@ -521,7 +521,7 @@ def run_comprehensive_ablation_study(
     # ANALYSIS
     # ==========================================
     print(f"\n{'='*80}")
-    print(f"📊 COMPREHENSIVE ABLATION ANALYSIS")
+    print(f"[ANALYSIS] COMPREHENSIVE ABLATION ANALYSIS")
     print(f"{'='*80}\n")
     
     baseline_acc = results['baseline']['final_accuracy']
@@ -600,9 +600,9 @@ def run_comprehensive_ablation_study(
     csv_file = output_dir / f'comprehensive_ablation_v2_{timestamp}.csv'
     df.to_csv(csv_file, index=False)
     
-    print(f"\n✅ Comprehensive ablation study completed!")
-    print(f"📁 Results: {results_file}")
-    print(f"📊 CSV: {csv_file}")
+    print(f"\n[OK] Comprehensive ablation study completed!")
+    print(f"[SAVED] Results: {results_file}")
+    print(f"[CSV] {csv_file}")
     
     return {
         'results_file': str(results_file),
