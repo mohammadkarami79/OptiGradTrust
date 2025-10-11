@@ -32,7 +32,8 @@ def set_seed(seed):
 
 def run_with_config(config_name, rl_aggregation_method, warmup=None, rampup=None, 
                     num_rounds=75, attack_types=None, malicious_ratio=0.5, 
-                    attack_intensity=50.0, seed=42):
+                    attack_intensity=50.0, seed=42, 
+                    disable_rl=False, disable_dual_attention=False):
     """
     اجرای تست با یک configuration خاص
     """
@@ -54,6 +55,8 @@ def run_with_config(config_name, rl_aggregation_method, warmup=None, rampup=None
     print(f"[CONFIG] {config_name}")
     print(f"{'='*80}")
     print(f"  RL Aggregation Method: {rl_aggregation_method}")
+    print(f"  Disable RL: {disable_rl}")
+    print(f"  Disable Dual Attention: {disable_dual_attention}")
     if warmup is not None:
         print(f"  Warmup Rounds: {warmup}")
     if rampup is not None:
@@ -66,8 +69,8 @@ def run_with_config(config_name, rl_aggregation_method, warmup=None, rampup=None
         disabled_features=[],
         disable_vae_training=False,
         disable_shapley_computation=False,
-        disable_rl=False,
-        disable_dual_attention=False,
+        disable_rl=disable_rl,
+        disable_dual_attention=disable_dual_attention,
         num_rounds=num_rounds,
         attack_types=attack_types,
         malicious_ratio=malicious_ratio,
@@ -131,7 +134,9 @@ def main():
         attack_types=combined_attacks,
         malicious_ratio=malicious_ratio,
         attack_intensity=attack_intensity,
-        seed=seed
+        seed=seed,
+        disable_rl=True,  # فقط Dual Attention
+        disable_dual_attention=False
     )
     
     print("\n[OK] Pure Dual Attention completed!")
@@ -158,7 +163,9 @@ def main():
         attack_types=combined_attacks,
         malicious_ratio=malicious_ratio,
         attack_intensity=attack_intensity,
-        seed=seed
+        seed=seed,
+        disable_rl=False,  # Hybrid: RL فعال
+        disable_dual_attention=False
     )
     
     print("\n[OK] Hybrid (Default) completed!")
@@ -185,7 +192,9 @@ def main():
         attack_types=combined_attacks,
         malicious_ratio=malicious_ratio,
         attack_intensity=attack_intensity,
-        seed=seed
+        seed=seed,
+        disable_rl=False,  # Hybrid Conservative: RL فعال
+        disable_dual_attention=False
     )
     
     print("\n[OK] Hybrid Conservative completed!")
@@ -212,7 +221,9 @@ def main():
         attack_types=combined_attacks,
         malicious_ratio=malicious_ratio,
         attack_intensity=attack_intensity,
-        seed=seed
+        seed=seed,
+        disable_rl=False,  # Pure RL: RL فعال از ابتدا
+        disable_dual_attention=False
     )
     
     print("\n[OK] Pure RL completed!")
