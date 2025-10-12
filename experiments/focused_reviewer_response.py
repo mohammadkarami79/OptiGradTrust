@@ -36,6 +36,9 @@ def run_experiment(name, config_updates, num_rounds=50):
     print(f"{'='*80}")
     
     import federated_learning.config.config as config
+    from federated_learning.training.server import Server
+    from federated_learning.training.client import Client
+    from federated_learning.data.dataset_utils import load_dataset, create_client_datasets
     
     # ذخیره تنظیمات قبلی
     original_settings = {}
@@ -43,30 +46,82 @@ def run_experiment(name, config_updates, num_rounds=50):
         original_settings[key] = getattr(config, key, None)
         setattr(config, key, value)
     
-    # اجرای training
-    from federated_learning.training.server import Server
-    from federated_learning.training.client import Client
-    
     try:
-        # Setup
+        # Load data
+        print("Loading dataset...")
+        root_dataset, test_dataset = load_dataset()
+        root_loader = torch.utils.data.DataLoader(root_dataset, batch_size=config.BATCH_SIZE, shuffle=True, num_workers=0)
+        
+        # Create server
+        print("Creating server...")
         server = Server()
-        server.setup_clients()
+        server.set_datasets(root_loader, test_dataset)
+        
+        # Pre-train if needed
+        server._pretrain_global_model()
+        initial_accuracy = server.evaluate_model()
+        print(f"Initial accuracy: {initial_accuracy:.4f}")
+        
+        # Create client datasets
+        print("Creating clients...")
+        root_client_dataset, client_datasets = create_client_datasets(
+            train_dataset=root_dataset,
+            num_clients=config.NUM_CLIENTS,
+            iid=not config.ENABLE_NON_IID,
+            alpha=config.DIRICHLET_ALPHA if config.ENABLE_NON_IID else None
+        )
+        
+        # Create clients
+        clients = []
+        for i in range(config.NUM_CLIENTS):
+            client = Client(client_id=i, dataset=client_datasets[i], is_malicious=False)
+            clients.append(client)
+        
+        server.add_clients(clients)
+        
+        # Configure malicious clients if needed
+        num_malicious = int(config.NUM_CLIENTS * config.FRACTION_MALICIOUS)
+        if num_malicious > 0:
+            malicious_indices = np.random.choice(config.NUM_CLIENTS, num_malicious, replace=False)
+            for idx in malicious_indices:
+                clients[idx].is_malicious = True
+                clients[idx].set_attack_parameters(
+                    attack_type=config.ATTACK_TYPE,
+                    scaling_factor=config.SCALING_FACTOR if hasattr(config, 'SCALING_FACTOR') else 10.0
+                )
         
         # Train
         print(f"Training for {num_rounds} rounds...")
         server.train(num_rounds=num_rounds)
         
         # Get results
-        final_acc = server.global_model_accuracy if hasattr(server, 'global_model_accuracy') else 0.0
+        final_acc = server.evaluate_model()
+        
+        # Calculate detection metrics if available
+        detection_precision = 0.0
+        detection_recall = 0.0
+        detection_f1 = 0.0
+        
+        if hasattr(server, 'detection_metrics'):
+            detection_precision = server.detection_metrics.get('precision', 0.0)
+            detection_recall = server.detection_metrics.get('recall', 0.0)
+            detection_f1 = server.detection_metrics.get('f1', 0.0)
         
         result = {
             'name': name,
+            'initial_accuracy': float(initial_accuracy),
             'final_accuracy': float(final_acc),
+            'improvement': float(final_acc - initial_accuracy),
             'num_rounds': num_rounds,
+            'detection_precision': float(detection_precision),
+            'detection_recall': float(detection_recall),
+            'detection_f1': float(detection_f1),
             'config': config_updates
         }
         
-        print(f"\n[Result] {name}: {final_acc:.4f}")
+        print(f"\n[Result] {name}:")
+        print(f"  Final Accuracy: {final_acc:.4f}")
+        print(f"  Improvement: {final_acc - initial_accuracy:+.4f}")
         
     finally:
         # بازگرداندن تنظیمات
