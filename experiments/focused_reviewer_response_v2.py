@@ -102,7 +102,7 @@ def run_single_experiment(
     
     # Save original config
     original_dataset = config.DATASET
-    original_attack = config.ATTACK_TYPE
+    original_attack = getattr(config, 'ATTACK_TYPE', None)
     original_aggregation = config.GRADIENT_COMBINATION_METHOD
     
     try:
@@ -198,7 +198,10 @@ def run_single_experiment(
     finally:
         # Restore config
         config.DATASET = original_dataset
-        config.ATTACK_TYPE = original_attack
+        if original_attack is not None:
+            config.ATTACK_TYPE = original_attack
+        elif hasattr(config, 'ATTACK_TYPE'):
+            delattr(config, 'ATTACK_TYPE')
         config.GRADIENT_COMBINATION_METHOD = original_aggregation
         config.AGGREGATION_METHOD = original_aggregation
 
