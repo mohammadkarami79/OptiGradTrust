@@ -68,7 +68,7 @@ BATCH_SIZE = 32                    # Optimal batch for MNIST
 LR = 0.01                          # Learning rate for MNIST CNN
 LOCAL_EPOCHS_ROOT = 12             # Root pretrain epochs
 LOCAL_EPOCHS_CLIENT = 4            # Client local epochs
-GLOBAL_EPOCHS = 20                 # Global rounds
+GLOBAL_EPOCHS = 10                 # Global rounds (reduced for testing)
 CLIENT_SELECTION_RATIO = 1.0
 CLIENT_FRACTION = 1.0
 LEARNING_RATE = LR
@@ -89,11 +89,11 @@ PIN_MEMORY = False                # Disable pin memory to save GPU memory
 # MODEL AND DATASET CONFIGURATION
 # ======================================
 
-# Dataset and model configuration - Set for MNIST non-IID label skew
-DATASET = 'MNIST'
-MODEL = 'CNN'
-INPUT_CHANNELS = 1  # MNIST is grayscale
-NUM_CLASSES = 10
+# Dataset and model configuration - Set for Alzheimer
+DATASET = 'alzheimer'
+MODEL = 'ResNet18'
+INPUT_CHANNELS = 3  # Alzheimer MRI is RGB
+NUM_CLASSES = 4  # Alzheimer classes
 
 # ResNet configuration
 RESNET50_UNFREEZE_LAYERS = 20      # Number of layers to unfreeze from the end for ResNet50
@@ -131,10 +131,10 @@ GRADIENT_DIMENSION = None          # Will be set automatically
 # DATA DISTRIBUTION CONFIGURATION
 # ======================================
 
-# Set to IID for baseline
-ENABLE_NON_IID = False
-DATA_DISTRIBUTION = 'iid'
-DIRICHLET_ALPHA = None
+# Set to Non-IID for Alzheimer (more realistic)
+ENABLE_NON_IID = True
+DATA_DISTRIBUTION = 'non_iid'
+DIRICHLET_ALPHA = 0.5
 NON_IID_CLASSES_PER_CLIENT = None
 LABEL_SKEW_RATIO = None
 QUANTITY_SKEW_RATIO = None
