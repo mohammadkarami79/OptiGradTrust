@@ -142,7 +142,7 @@ def create_federated_dataset(
     root_dataset, client_dataset = random_split(
         train_dataset, 
         [num_root_examples, num_client_examples],
-        generator=torch.Generator().manual_seed(SEED)
+        generator=torch.Generator().manual_seed(RANDOM_SEED)
     )
     
     # Create a DataLoader for the test dataset
