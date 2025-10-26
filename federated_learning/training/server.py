@@ -421,6 +421,41 @@ class Server:
         
         return features
         
+    def _compute_temperature_weights(self, round_idx, total_rounds):
+        """
+        Compute Dual Attention and RL weights using temperature annealing.
+        
+        Temperature starts high (DA dominates) and decreases over time (RL increases).
+        This implements the temperature-based hybrid approach described in the paper.
+        
+        Args:
+            round_idx: Current training round (0-indexed)
+            total_rounds: Total number of training rounds
+            
+        Returns:
+            tuple: (da_weight, rl_weight) where da_weight + rl_weight = 1.0
+        """
+        # Temperature parameters
+        # High temperature = More Dual Attention weight
+        # Low temperature = More RL weight
+        initial_temp = 10.0  # Start high (DA dominates ~90%)
+        final_temp = 1.0     # End lower (RL increases to ~50%)
+        
+        # Compute progress through training (0.0 to 1.0)
+        progress = round_idx / max(total_rounds - 1, 1)
+        
+        # Exponential decay of temperature
+        # temp = initial_temp * (final_temp / initial_temp)^progress
+        temp = initial_temp * ((final_temp / initial_temp) ** progress)
+        
+        # Convert temperature to weights using sigmoid-like function
+        # High temp → high DA weight
+        # Low temp → low DA weight (high RL weight)
+        da_weight = temp / (1.0 + temp)
+        rl_weight = 1.0 - da_weight
+        
+        return da_weight, rl_weight
+    
     def _generate_malicious_features(self, honest_features):
         """
         Generate synthetic malicious gradient features for training.
@@ -1050,6 +1085,33 @@ class Server:
                         blended_gradient = (blend_ratio * aggregated_gradient + 
                                              (1 - blend_ratio) * dual_attention_gradient)
                         aggregated_gradient = blended_gradient
+                
+                # Temperature-based hybrid: gradual transition from DA to RL across ALL rounds
+                elif 'RL_AGGREGATION_METHOD' in globals() and RL_AGGREGATION_METHOD == 'temperature_hybrid':
+                    # Compute temperature-based weights
+                    da_weight, rl_weight = self._compute_temperature_weights(round_idx, num_rounds)
+                    
+                    print(f"Temperature Hybrid: Round {round_idx}/{num_rounds} - DA={da_weight:.3f}, RL={rl_weight:.3f}")
+                    
+                    # Get dual attention weights
+                    if hasattr(self, 'dual_attention_weights') and self.dual_attention_weights is not None:
+                        dual_w = self.dual_attention_weights
+                    else:
+                        dual_w = self.weights
+                    
+                    # Get dual attention gradient
+                    if AGGREGATION_METHOD == 'fedbn':
+                        dual_attention_gradient = self._aggregate_fedbn(all_gradients, dual_w)
+                    elif AGGREGATION_METHOD == 'fedprox':
+                        dual_attention_gradient = self._aggregate_fedavg(all_gradients, dual_w)
+                    else:
+                        dual_attention_gradient = self._aggregate_fedavg(all_gradients, dual_w)
+                    
+                    # Blend gradients using temperature weights
+                    # aggregated_gradient already contains RL gradient
+                    blended_gradient = (da_weight * dual_attention_gradient + 
+                                       rl_weight * aggregated_gradient)
+                    aggregated_gradient = blended_gradient
             else:
                 # Default to weighted average
                 print(f"Unknown aggregation method: {current_aggregation_method}. Using weighted average.")
