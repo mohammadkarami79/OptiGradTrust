@@ -158,11 +158,11 @@ def run_experiment(exp_name, exp_config, base_config):
             client = Client(
                 client_id=i,
                 dataset=dataset,
-                model_fn=server.model_fn,
-                device=server.device
+                is_malicious=False
             )
             clients.append(client)
-            server.add_clients([client])
+        
+        server.add_clients(clients)
         
         # Initial evaluation
         initial_acc = server.evaluate_model()

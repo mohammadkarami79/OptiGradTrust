@@ -79,11 +79,11 @@ for i, dataset in enumerate(client_datasets):
     client = Client(
         client_id=i,
         dataset=dataset,
-        model_fn=server.model_fn,
-        device=server.device
+        is_malicious=False
     )
     clients.append(client)
-    server.add_clients([client])
+
+server.add_clients(clients)
 
 print(f"  Created {len(clients)} clients")
 
