@@ -143,7 +143,13 @@ def run_experiment(exp_name, exp_config, base_config):
         
         # Setup clients
         print("Setting up clients...")
-        client_datasets = create_client_datasets(root_dataset, base_config['num_clients'])
+        from federated_learning.utils.data_utils import split_data_among_clients
+        client_datasets, _ = split_data_among_clients(
+            root_dataset,
+            num_clients=base_config['num_clients'],
+            iid=not base_config['enable_non_iid'],
+            dirichlet_alpha=base_config['dirichlet_alpha'] if base_config['enable_non_iid'] else None
+        )
         
         clients = []
         for i, dataset in enumerate(client_datasets):

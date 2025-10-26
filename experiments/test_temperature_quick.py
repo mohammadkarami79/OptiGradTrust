@@ -63,8 +63,12 @@ except Exception as e:
 
 # Setup clients
 print("\n[4/4] Setting up clients...")
-from federated_learning.utils.data_utils import create_client_datasets
-client_datasets = create_client_datasets(root_dataset, config.NUM_CLIENTS)
+from federated_learning.utils.data_utils import split_data_among_clients
+client_datasets, _ = split_data_among_clients(
+    root_dataset, 
+    num_clients=config.NUM_CLIENTS,
+    iid=not config.ENABLE_NON_IID
+)
 
 from federated_learning.training.client import Client
 clients = []
