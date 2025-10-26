@@ -131,9 +131,9 @@ def create_federated_dataset(
     num_examples = len(train_dataset)
     
     # Set random seed for reproducibility
-    torch.manual_seed(SEED)
-    np.random.seed(SEED)
-    random.seed(SEED)
+    torch.manual_seed(RANDOM_SEED)
+    np.random.seed(RANDOM_SEED)
+    random.seed(RANDOM_SEED)
     
     # Split the dataset to create the root dataset (trusted)
     num_root_examples = int(num_examples * root_dataset_ratio)
