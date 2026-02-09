@@ -135,6 +135,83 @@ python main.py --test-mode
 python -m federated_learning.test_basic
 ```
 
+## 🚀 Revision Experiments (February 2026) - OASIS & ALZHEIMER Datasets
+
+### **New: Paper Revision with Statistical Rigor**
+
+We have conducted comprehensive revision experiments addressing all reviewer feedback with:
+- ✅ **Real Clinical Data**: OASIS (real patient MRI scans) + ALZHEIMER (Kaggle medical dataset)
+- ✅ **Statistical Validation**: n=5 random seeds with mean±std and 95% confidence intervals
+- ✅ **Strong Attacks**: 40% malicious clients, 30× gradient scaling, 90% label flipping
+- ✅ **Extended Baselines**: FedAvg, Krum, FLTrust, **TRFA** (new)
+- ✅ **Complete Coverage**: 225 experiments across both datasets
+
+### **Quick Start: Reproduce Our Revision Results**
+
+#### **Run 1: OASIS Dataset (Complete Suite - ~18-24 hours)**
+```bash
+# Runs all phases: Clinical, Scalability, Baselines, Ablation, Extreme Imbalance
+nohup python run_optimized_experiments.py --revision-quick --epochs 8 > revision_quick.log 2>&1 &
+tail -f revision_quick.log
+```
+
+**This executes:**
+- **Phase 1**: OASIS clinical experiments (40 experiments: 2 distributions × 4 attacks × 5 seeds)
+- **Phase 2**: Scalability tests (10 experiments: 2 client counts × 5 seeds)
+- **Phase 3**: Baseline comparison (100 experiments: 5 methods × 4 attacks × 5 seeds)
+- **Phase 5**: Component ablation (25 experiments: 5 configs × 5 seeds)
+- **Phase 7**: Extreme class imbalance (10 experiments: 2 configs × 5 seeds)
+
+#### **Run 2: ALZHEIMER Dataset (Phase 1 Only - ~4-6 hours)**
+```bash
+# After OASIS completes, run ALZHEIMER for second dataset validation
+nohup python run_optimized_experiments.py --revision-quick --revision-dataset ALZHEIMER --epochs 8 --phase 1 > revision_quick_ALZHEIMER.log 2>&1 &
+tail -f revision_quick_ALZHEIMER.log
+```
+
+**This executes:**
+- **Phase 1**: ALZHEIMER clinical experiments (40 experiments with same config as OASIS)
+
+### **View Results**
+
+After experiments complete, results are organized in separate directories:
+
+```
+results/
+└── reviewer_experiments/
+    ├── oasis/                           # OASIS experiment results
+    │   ├── OPTIMIZED_COMPLETE_<timestamp>.json
+    │   ├── optimized_log_<timestamp>.txt
+    │   └── (individual phase result files)
+    └── alzheimer/                       # ALZHEIMER experiment results
+        ├── OPTIMIZED_ALZHEIMER_<timestamp>.json
+        └── optimized_log_<timestamp>.txt
+```
+
+### **Result Files Contain:**
+- Mean accuracy ± standard deviation
+- 95% confidence intervals
+- Min/Max values
+- Per-scenario statistics (e.g., `OASIS_IID_scaling_attack`, `ALZHEIMER_Dirichlet_0.5_noise_attack`)
+
+### **Key Configuration:**
+```python
+# Strong attack for clear baseline separation
+ATTACK_SEVERITY = {
+    'malicious_ratio': 0.4,      # 40% malicious clients
+    'scaling_factor': 30.0,       # 30× gradient scaling
+    'noise_factor': 15.0,         # Very high noise
+    'flip_probability': 0.9       # 90% label flipping
+}
+
+# Statistical rigor
+SEEDS = [42, 123, 456, 789, 1024]  # n=5 seeds
+```
+
+For detailed experiment design, see [`REVISION_EXPERIMENTS_REPORT.md`](REVISION_EXPERIMENTS_REPORT.md).
+
+---
+
 ## Quick Start
 
 ### Basic Usage
@@ -147,10 +224,7 @@ python main.py --dataset CIFAR10 --model RESNET18 --aggregation fedbn_prox
 python main.py --dataset ALZHEIMER --model CNN --attack_type scaling
 
 # Run comprehensive OptiGradTrust evaluation
-python run_fltrust_experiments.py
-
-# Generate comparison plots and analysis
-python -m federated_learning.utils.plotting_utils
+python run_all_experiments.py
 ```
 
 ### Configuration Examples

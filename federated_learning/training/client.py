@@ -5,6 +5,13 @@ import copy
 import numpy as np
 import random
 from federated_learning.config.config import *
+from federated_learning.config import config  # Import as module for runtime access
+
+# Import OASIS classes constant
+try:
+    OASIS_CLASSES = 4  # OASIS-1 has 4 dementia classes (CDR 0, 0.5, 1, 2)
+except:
+    OASIS_CLASSES = 4
 from federated_learning.training.training_utils import client_update
 from federated_learning.models.cnn import CNNMnist
 from federated_learning.models.resnet import ResNet50Alzheimer, ResNet18Alzheimer
@@ -46,6 +53,11 @@ class Attack:
         if self.attack_type == 'label_flipping':
             # Flip labels for classification tasks
             num_classes = len(torch.unique(target))
+            # Handle edge case: if only 1 class in batch, we need at least 2 for flipping
+            if num_classes < 2:
+                # Assume 4 classes for medical datasets (typical), otherwise use 10
+                num_classes = 4 if hasattr(self, 'num_classes') else 4
+                print(f"Label flipping: Only 1 class in batch, using {num_classes} classes for flipping")
             new_target = (target + torch.randint(1, num_classes, target.shape, device=target.device)) % num_classes
             print(f"Label flipping attack: Flipped {(new_target != target).sum().item()}/{len(target)} labels")
             return data, new_target
@@ -94,11 +106,16 @@ class Attack:
             attack_name = f"Partial scaling attack (factor: {scaling_factor:.1f}, {partial_percent*100:.1f}% of elements)"
             
         elif self.attack_type == 'noise_attack':
-            # Add Gaussian noise to the gradient
-            noise_level = 0.5
-            noise = torch.randn_like(gradient) * noise_level * gradient.norm()
+            # Add Gaussian noise; use config/revision severity (noise_factor) when set
+            noise_factor = getattr(self, 'noise_factor', None)
+            if noise_factor is None and hasattr(self, 'attack_params'):
+                noise_factor = self.attack_params.get('noise_factor')
+            if noise_factor is None:
+                noise_factor = 0.5
+            grad_std = torch.std(gradient).item() or 1e-6
+            noise = torch.randn_like(gradient, device=device) * grad_std * noise_factor
             modified_grad = gradient + noise
-            attack_name = f"Noise attack (level: {noise_level:.2f} * gradient norm)"
+            attack_name = f"Noise attack (factor: {noise_factor:.1f})"
             
         elif self.attack_type == 'min_max_attack':
             # Amplify largest elements and reduce smallest ones
@@ -171,12 +188,24 @@ class Attack:
         # Calculate and print attack metrics
         modified_norm = torch.norm(modified_grad).item()
         norm_change_abs = modified_norm - original_norm
-        norm_change_pct = (modified_norm / original_norm - 1) * 100
+        # Avoid division by zero when original_norm is 0
+        if original_norm > 1e-10:
+            norm_change_pct = (modified_norm / original_norm - 1) * 100
+        else:
+            norm_change_pct = 0.0 if modified_norm < 1e-10 else float('inf')
         
-        cosine_sim = torch.nn.functional.cosine_similarity(
-            modified_grad.view(1, -1), 
-            original_gradient.view(1, -1)
-        ).item()
+        # Robust cosine similarity calculation - handle zero-norm vectors
+        if original_norm > 1e-10 and modified_norm > 1e-10:
+            cosine_sim = torch.nn.functional.cosine_similarity(
+                modified_grad.view(1, -1), 
+                original_gradient.view(1, -1)
+            ).item()
+        elif original_norm < 1e-10 and modified_norm < 1e-10:
+            # Both zero vectors - consider them perfectly aligned
+            cosine_sim = 1.0
+        else:
+            # One is zero, the other is not - consider them orthogonal
+            cosine_sim = 0.0
         
         print(f"{attack_name} applied:")
         print(f"  Original norm: {original_norm:.4f}")
@@ -189,26 +218,28 @@ class Attack:
 
 class Client:
     """
-    کلاس Client که یک کلاینت را در یادگیری فدرال مدل‌سازی می‌کند.
-    هر کلاینت دارای داده‌های محلی خودش است و می‌تواند یک مدل را آموزش دهد.
+    Client class that models a client in federated learning.
+    Each client has its own local data and can train a model.
     """
     
     def __init__(self, client_id, dataset, is_malicious=False, num_classes=None, local_epochs=None):
         """
-        مقداردهی اولیه یک کلاینت
+        Initialize a client.
         
         Args:
-            client_id: شناسه منحصر به فرد کلاینت
-            dataset: مجموعه داده‌های محلی کلاینت
-            is_malicious: آیا این کلاینت مخرب است؟
-            num_classes: تعداد کلاس‌های مدل
-            local_epochs: تعداد دوره‌های آموزش محلی (اگر None باشد، از مقدار پیش‌فرض استفاده می‌شود)
+            client_id: Unique client identifier
+            dataset: Client's local dataset
+            is_malicious: Whether this client is malicious
+            num_classes: Number of model classes
+            local_epochs: Number of local training epochs (uses default if None)
         """
         self.client_id = client_id
         self.dataset = dataset
         self.is_malicious = is_malicious
         self.num_classes = num_classes
-        self.local_epochs = local_epochs if local_epochs is not None else LOCAL_EPOCHS_CLIENT
+        # CRITICAL: Read LOCAL_EPOCHS_CLIENT from config at runtime
+        default_local_epochs = getattr(config, 'LOCAL_EPOCHS_CLIENT', LOCAL_EPOCHS_CLIENT)
+        self.local_epochs = local_epochs if local_epochs is not None else default_local_epochs
         
         # Set device
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -230,17 +261,25 @@ class Client:
         }
         
         # Initialize model based on config
-        if MODEL == 'CNN':
+        # CRITICAL: Read from config module at runtime for dynamic dataset/model support
+        current_model = getattr(config, 'MODEL', MODEL)
+        current_dataset = getattr(config, 'DATASET', DATASET)
+        alzheimer_classes = getattr(config, 'ALZHEIMER_CLASSES', ALZHEIMER_CLASSES)
+        
+        if current_model == 'CNN':
             # Determine input channels and number of classes based on dataset
-            if DATASET == 'MNIST':
+            if current_dataset == 'MNIST':
                 in_channels = 1
                 num_classes = 10
-            elif DATASET == 'CIFAR10':
+            elif current_dataset == 'CIFAR10':
                 in_channels = 3
                 num_classes = 10
-            elif DATASET == 'ALZHEIMER':
+            elif current_dataset == 'ALZHEIMER':
                 in_channels = 3
-                num_classes = ALZHEIMER_CLASSES
+                num_classes = alzheimer_classes
+            elif current_dataset == 'OASIS':
+                in_channels = 3
+                num_classes = 4  # OASIS CDR classes
             else:
                 # Default fallback
                 in_channels = 1
@@ -248,16 +287,20 @@ class Client:
                 
             self.model = CNNMnist(in_channels=in_channels, num_classes=num_classes).to(self.device)
             
-        elif MODEL == 'ResNet50':
+        elif current_model == 'ResNet50':
             if num_classes is None:
-                if DATASET == 'MNIST':
+                if current_dataset == 'MNIST':
                     num_classes = 10
-                elif DATASET == 'CIFAR10':
+                elif current_dataset == 'CIFAR10':
                     num_classes = 10
-                elif DATASET == 'ALZHEIMER':
-                    num_classes = ALZHEIMER_CLASSES
+                elif current_dataset == 'ALZHEIMER':
+                    num_classes = alzheimer_classes
+                elif current_dataset == 'OASIS':
+                    num_classes = 4  # OASIS CDR classes
                 else:
-                    raise ValueError(f"Unknown dataset: {DATASET}")
+                    # Default to 4 classes for unknown medical datasets
+                    num_classes = 4
+                    print(f"Warning: Unknown dataset {current_dataset}, using {num_classes} classes")
             
             self.model = ResNet50Alzheimer(
                 num_classes=num_classes,
@@ -265,16 +308,20 @@ class Client:
                 pretrained=RESNET_PRETRAINED
             ).to(self.device)
             
-        elif MODEL == 'ResNet18':
+        elif current_model == 'ResNet18':
             if num_classes is None:
-                if DATASET == 'MNIST':
+                if current_dataset == 'MNIST':
                     num_classes = 10
-                elif DATASET == 'CIFAR10':
+                elif current_dataset == 'CIFAR10':
                     num_classes = 10
-                elif DATASET == 'ALZHEIMER':
-                    num_classes = ALZHEIMER_CLASSES
+                elif current_dataset == 'ALZHEIMER':
+                    num_classes = alzheimer_classes
+                elif current_dataset == 'OASIS':
+                    num_classes = 4  # OASIS CDR classes
                 else:
-                    raise ValueError(f"Unknown dataset: {DATASET}")
+                    # Default to 4 classes for unknown medical datasets
+                    num_classes = 4
+                    print(f"Warning: Unknown dataset {current_dataset}, using {num_classes} classes")
             
             self.model = ResNet18Alzheimer(
                 num_classes=num_classes,
@@ -283,9 +330,13 @@ class Client:
             ).to(self.device)
             
         else:
-            raise ValueError(f"Unknown model type: {MODEL}")
+            raise ValueError(f"Unknown model type: {current_model}")
+        
+        # CRITICAL: Read LR and BATCH_SIZE from config at runtime
+        current_lr = getattr(config, 'LR', LR)
+        current_batch_size = getattr(config, 'BATCH_SIZE', BATCH_SIZE)
             
-        self.optimizer = optim.SGD(self.model.parameters(), lr=LR)
+        self.optimizer = optim.SGD(self.model.parameters(), lr=current_lr)
         self.criterion = nn.NLLLoss()
         
         # Create proper dataloader for the dataset
@@ -295,7 +346,7 @@ class Client:
             custom_dataset = SubsetDataset(dataset.dataset, dataset.indices)
             self.train_loader = torch.utils.data.DataLoader(
                 custom_dataset, 
-                batch_size=BATCH_SIZE, 
+                batch_size=current_batch_size, 
                 shuffle=True,
                 num_workers=0,  # Set to 0 to avoid multiprocessing issues
                 pin_memory=False
@@ -304,7 +355,7 @@ class Client:
             # Standard dataloader for regular datasets
             self.train_loader = torch.utils.data.DataLoader(
                 dataset, 
-                batch_size=BATCH_SIZE, 
+                batch_size=current_batch_size, 
                 shuffle=True,
                 num_workers=0,  # Set to 0 to avoid multiprocessing issues
                 pin_memory=False
@@ -312,14 +363,27 @@ class Client:
         
         # Initialize gradient dimension reducer if enabled
         self.dimension_reducer = None
-        if ENABLE_DIMENSION_REDUCTION and (MODEL == 'ResNet50' or MODEL == 'ResNet18'):
-            self.dimension_reducer = GradientDimensionReducer(reduction_ratio=DIMENSION_REDUCTION_RATIO)
-            print(f"Client {client_id}: Dimension reducer initialized with ratio {DIMENSION_REDUCTION_RATIO}")
+        enable_dim_reduction = getattr(config, 'ENABLE_DIMENSION_REDUCTION', ENABLE_DIMENSION_REDUCTION)
+        dim_reduction_ratio = getattr(config, 'DIMENSION_REDUCTION_RATIO', DIMENSION_REDUCTION_RATIO)
+        if enable_dim_reduction and (current_model == 'ResNet50' or current_model == 'ResNet18'):
+            self.dimension_reducer = GradientDimensionReducer(reduction_ratio=dim_reduction_ratio)
+            print(f"Client {client_id}: Dimension reducer initialized with ratio {dim_reduction_ratio}")
 
         # Initialize attack if client is malicious
         if self.is_malicious:
-            self.attack = Attack(ATTACK_TYPE)
-            print(f"Client {client_id}: Initialized as malicious with {ATTACK_TYPE} attack")
+            # Try to use ATTACK_TYPE from config, otherwise defer to set_attack_parameters
+            try:
+                if 'ATTACK_TYPE' in globals() and ATTACK_TYPE:
+                    self.attack = Attack(ATTACK_TYPE)
+                    print(f"Client {client_id}: Initialized as malicious with {ATTACK_TYPE} attack")
+                else:
+                    # Attack type will be set later via set_attack_parameters
+                    self.attack = None
+                    print(f"Client {client_id}: Initialized as malicious (attack type to be set)")
+            except NameError:
+                # ATTACK_TYPE not defined - attack will be set via set_attack_parameters
+                self.attack = None
+                print(f"Client {client_id}: Initialized as malicious (attack type to be set)")
 
     def compute_gradients(self, model, data_loader):
         """Compute gradients with improved numerical stability."""
@@ -396,7 +460,9 @@ class Client:
         self.model.train()
         
         # Set optimizer and move to correct device
-        self.optimizer = optim.SGD(self.model.parameters(), lr=LR)
+        # CRITICAL: Read LR from config at runtime
+        current_lr = getattr(config, 'LR', LR)
+        self.optimizer = optim.SGD(self.model.parameters(), lr=current_lr)
         
         # Use the instance local_epochs variable
         print(f"Client {self.client_id}: Training for {self.local_epochs} local epochs")
@@ -538,7 +604,12 @@ class Client:
                 print(f"Client {self.client_id}: Applied {self.attack.attack_type}:")
                 print(f"  Original gradient norm: {client_grad_norm:.4f}")
                 print(f"  Modified gradient norm: {modified_norm:.4f}")
-                print(f"  Norm increased by: {modified_norm - client_grad_norm:.4f} ({(modified_norm/client_grad_norm - 1)*100:.2f}%)")
+                # Avoid division by zero when client_grad_norm is 0
+                if client_grad_norm > 1e-10:
+                    pct_change = (modified_norm/client_grad_norm - 1)*100
+                    print(f"  Norm increased by: {modified_norm - client_grad_norm:.4f} ({pct_change:.2f}%)")
+                else:
+                    print(f"  Norm increased by: {modified_norm - client_grad_norm:.4f} (original norm ~0)")
                 print(f"  Gradient difference norm: {grad_diff:.4f}")
                 
                 # Save original gradient for server to analyze
@@ -562,7 +633,11 @@ class Client:
             original_norm = torch.norm(original_gradient).item()
             print(f"  Original norm (before attack): {original_norm:.4f}")
             print(f"  Normalized original norm: {min(original_norm / MAX_GRADIENT_NORM, 1.0):.4f}")
-            print(f"  Norm increase from attack: {grad_norm - original_norm:.4f} ({(grad_norm/original_norm - 1)*100:.2f}%)")
+            # Avoid division by zero when original_norm is 0
+            if original_norm > 1e-10:
+                print(f"  Norm increase from attack: {grad_norm - original_norm:.4f} ({(grad_norm/original_norm - 1)*100:.2f}%)")
+            else:
+                print(f"  Norm increase from attack: {grad_norm - original_norm:.4f} (original norm ~0, cannot compute percentage)")
         
         return client_gradient, gradient_features
 
@@ -704,7 +779,11 @@ class Client:
                 orig_norm = torch.norm(self.original_gradient).item()
                 print(f"  Original gradient norm (before attack): {orig_norm:.4f}")
                 print(f"  Normalized original norm: {min(orig_norm / max_norm, 1.0):.4f}")
-                print(f"  Norm increase from attack: {grad_norm - orig_norm:.4f} ({(grad_norm/orig_norm - 1)*100:.2f}%)")
+                # Avoid division by zero when orig_norm is 0
+                if orig_norm > 1e-10:
+                    print(f"  Norm increase from attack: {grad_norm - orig_norm:.4f} ({(grad_norm/orig_norm - 1)*100:.2f}%)")
+                else:
+                    print(f"  Norm increase from attack: {grad_norm - orig_norm:.4f} (original norm ~0)")
         
         return features
 
@@ -734,9 +813,14 @@ class Client:
             
             # Print attack statistics
             modified_norm = torch.norm(modified_gradient).item()
-            relative_change = (modified_norm / original_norm - 1) * 100
-            print(f"Attack: {self.attack.attack_type} - Norm after attack: {modified_norm:.4f}")
-            print(f"Relative change: {relative_change:.2f}%")
+            # Avoid division by zero when original_norm is 0
+            if original_norm > 1e-10:
+                relative_change = (modified_norm / original_norm - 1) * 100
+                print(f"Attack: {self.attack.attack_type} - Norm after attack: {modified_norm:.4f}")
+                print(f"Relative change: {relative_change:.2f}%")
+            else:
+                print(f"Attack: {self.attack.attack_type} - Norm after attack: {modified_norm:.4f}")
+                print(f"Relative change: N/A (original norm was ~0)")
             
             return modified_gradient
         else:

@@ -73,9 +73,14 @@ def load_alzheimer_dataset():
         num_classes: Number of classes
         input_channels: Number of input channels
     """
+    # Use config at runtime so configure_for_dataset() can set path (e.g. PROJECT_ROOT/data/alzheimer on server)
+    import federated_learning.config.config as config
+    data_dir = getattr(config, 'ALZHEIMER_DATA_DIR', ALZHEIMER_DATA_DIR)
+    
     # Define transforms
+    img_size = getattr(config, 'ALZHEIMER_IMG_SIZE', ALZHEIMER_IMG_SIZE)
     train_transform = transforms.Compose([
-        transforms.Resize((ALZHEIMER_IMG_SIZE, ALZHEIMER_IMG_SIZE)),
+        transforms.Resize((img_size, img_size)),
         transforms.RandomHorizontalFlip(),
         transforms.RandomRotation(10),
         transforms.ToTensor(),
@@ -83,19 +88,19 @@ def load_alzheimer_dataset():
     ])
     
     test_transform = transforms.Compose([
-        transforms.Resize((ALZHEIMER_IMG_SIZE, ALZHEIMER_IMG_SIZE)),
+        transforms.Resize((img_size, img_size)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])  # ImageNet normalization
     ])
     
     # Load datasets
-    train_dir = os.path.join(ALZHEIMER_DATA_DIR, 'train')
-    test_dir = os.path.join(ALZHEIMER_DATA_DIR, 'test')
+    train_dir = os.path.join(data_dir, 'train')
+    test_dir = os.path.join(data_dir, 'test')
     
     # Check if directories exist
     if not os.path.exists(train_dir) or not os.path.exists(test_dir):
-        raise FileNotFoundError(f"Alzheimer's dataset not found in {ALZHEIMER_DATA_DIR}. " 
-                               f"Please download and extract it first.")
+        raise FileNotFoundError(f"Alzheimer's dataset not found in {data_dir}. " 
+                               f"Please download and extract it to {data_dir}/train and {data_dir}/test")
     
     # Load training data
     train_dataset = AlzheimerDataset(train_dir, transform=train_transform)

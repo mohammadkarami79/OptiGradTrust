@@ -229,9 +229,10 @@ class DualAttention(nn.Module):
         if features.size(1) > 4:
             weighted_features[:, 4] = 1.0 - torch.sigmoid((features[:, 4] - 0.6) * 4)
             
-        # Feature 5: Shapley - if present, higher is more suspicious
+        # Feature 5: Shapley - if present, LOWER Shapley = more suspicious (less contribution)
+        # FIXED: Higher Shapley value means more contribution = more trustworthy
         if features.size(1) > 5 and self.supports_shapley:
-            weighted_features[:, 5] = torch.sigmoid((features[:, 5] - 0.5) * 4)
+            weighted_features[:, 5] = 1.0 - torch.sigmoid((features[:, 5] - 0.5) * 4)
         
         # Direct feature interpretation for initial malicious score estimate
         # Higher values indicate more likely to be malicious
@@ -240,6 +241,10 @@ class DualAttention(nn.Module):
         # If no global context provided, use mean of features
         if global_context is None:
             global_context = torch.mean(features, dim=0, keepdim=True)
+        else:
+            # Ensure global_context matches feature_dim (server may pass 6-dim when Shapley was merged)
+            if global_context.size(1) != self.feature_dim:
+                global_context = global_context[:, :self.feature_dim]
             
         # Project features to hidden dimension
         x = self.feature_projection(features)
@@ -290,7 +295,7 @@ class DualAttention(nn.Module):
         
         return calibrated_malicious, confidence_scores
 
-    def get_gradient_weights(self, features, malicious_scores=None, confidence_scores=None):
+    def get_gradient_weights(self, features, malicious_scores=None, confidence_scores=None, raw_gradient_norms=None):
         """
         Compute weights for gradient aggregation based on malicious scores and features.
         
@@ -298,6 +303,7 @@ class DualAttention(nn.Module):
             features: Gradient features tensor [num_clients, num_features]
             malicious_scores: Pre-computed malicious scores (optional)
             confidence_scores: Pre-computed confidence scores (optional)
+            raw_gradient_norms: Raw (unnormalized) gradient norms for Byzantine detection [num_clients] (optional)
             
         Returns:
             weights: Aggregation weights [num_clients]
@@ -331,69 +337,102 @@ class DualAttention(nn.Module):
             threshold = mean_malicious + std_malicious / 2
             malicious_indices = [i for i, score in enumerate(malicious_values) if score > threshold]
             
-            # Check for abnormally high gradient norms (Feature index 3)
-            norm_features = features[:, 3].detach().cpu().numpy()  # Feature index 3 is gradient norm
+            # Check for abnormally high gradient norms
+            # CRITICAL FIX: Use raw_gradient_norms if available (for accurate scaling attack detection)
+            # The normalized feature (features[:, 3]) uses log compression which makes scaling attacks harder to detect
+            if raw_gradient_norms is not None:
+                # Use raw gradient norms for Byzantine detection (much better for scaling attacks)
+                norm_features = raw_gradient_norms.detach().cpu().numpy()
+                using_raw_norms = True
+                print("  Using RAW gradient norms for Byzantine detection (more accurate for scaling attacks)")
+            else:
+                # Fallback to normalized features (less accurate but still works for extreme attacks)
+                norm_features = features[:, 3].detach().cpu().numpy()  # Feature index 3 is gradient norm (log-normalized)
+                using_raw_norms = False
+                print("  Using normalized gradient norms for Byzantine detection (fallback mode)")
+            
+            # CRITICAL FIX: Use LOWER PERCENTILE to compute median (robust to 40% malicious contamination)
+            # With 40% malicious clients, even median can be affected
+            # Use 30th percentile as "honest median" estimate
+            norm_median_robust = np.percentile(norm_features, 30)  # Robust to up to 40% contamination
+            norm_median = np.median(norm_features)  # For logging
+            q1 = np.percentile(norm_features, 25)
+            q3 = np.percentile(norm_features, 75)
+            iqr = q3 - q1
+            
+            # Also compute mean/std for logging
             norm_mean = np.mean(norm_features)
             norm_std = np.std(norm_features)
             
-            # More selective threshold for high norm detection - only flag truly abnormal norms
-            # Increase threshold to 1.5 standard deviations to be more selective
-            norm_threshold = norm_mean + 1.5 * norm_std  # Increased from 0.7 * std to 1.5 * std
+            # CRITICAL FIX: Use ONLY the robust median for threshold
+            # A 20x scaling attack will have norm ~20x higher than honest clients
+            # Use 5x multiplier as threshold (catches anything above 5x normal)
+            # This is robust because even if robust_median is slightly inflated,
+            # 5x will still catch 20x attacks
+            norm_threshold = norm_median_robust * 5.0
+            
+            # Safety: ensure threshold isn't too low (minimum 0.1 to avoid false positives)
+            norm_threshold = max(norm_threshold, 0.1)
+            
+            print(f"  FIXED: Using robust 30th percentile ({norm_median_robust:.4f}) * 5 = threshold {norm_threshold:.4f}")
+            
+            print(f"  High norm detection (raw={using_raw_norms}): robust_median={norm_median_robust:.4f}, median={norm_median:.4f}, threshold={norm_threshold:.4f}")
+            print(f"  Norm range: min={norm_features.min():.4f}, max={norm_features.max():.4f}")
+            
+            # Check if threshold would catch the max norm
+            if norm_features.max() > norm_threshold:
+                print(f"  ✓ WILL DETECT: max norm {norm_features.max():.4f} > threshold {norm_threshold:.4f}")
+            else:
+                print(f"  ⚠ WARNING: max norm {norm_features.max():.4f} <= threshold {norm_threshold:.4f} - may miss attacks!")
             
             # Find clients with abnormally high gradient norms
             high_norm_indices = []
             for i, norm in enumerate(norm_features):
                 if norm > norm_threshold:
                     high_norm_indices.append(i)
+                    multiplier = norm / norm_median if norm_median > 0 else float('inf')
                     print(f"Detected client {i} as suspicious due to high gradient norm: {norm:.4f} (threshold: {norm_threshold:.4f})")
-                    print(f"  This is {(norm - norm_mean) / norm_std:.2f} standard deviations above the mean")
+                    print(f"  This is {multiplier:.2f}x the median gradient norm (scaling attack likely)")
             
             # SPECIAL DETECTION FOR ZERO/VERY LOW GRADIENT ATTACKS
             # Check for abnormally low gradient norms (zero attacks)
-            # FIXED: Make this detection more intelligent to avoid false positives
+            # FIXED: Use percentile-based adaptive thresholds to avoid false positives
             
-            # Calculate statistics for low norm detection
-            norm_mean = np.mean(norm_features)
-            norm_std = np.std(norm_features)
+            # Use IQR-based lower threshold (more robust)
+            # Only flag if well below the distribution AND anomalously low compared to typical gradients
+            lower_iqr_threshold = q1 - 1.5 * iqr  # Standard IQR outlier detection
             
-            # Adaptive threshold based on the distribution of norms
-            # Use a more conservative approach: only flag if significantly below the distribution
-            low_norm_threshold = max(0.05, norm_mean - 2.0 * norm_std)  # At least 2 std below mean
+            # Adaptive threshold: use smaller of IQR threshold or 10% of median
+            # This ensures we only flag truly anomalous zero/near-zero gradients
+            adaptive_low_threshold = min(lower_iqr_threshold, norm_median * 0.1) if norm_median > 0 else 0.001
             
-            # Additional criteria: must be very different from other clients
-            very_low_threshold = 0.03  # Extremely low absolute threshold
+            # Absolute floor: only flag as zero attack if norm is essentially zero (< 0.5% of median)
+            very_low_threshold = norm_median * 0.05 if norm_median > 0 else 0.001
+            
+            print(f"  Low norm detection: q1={q1:.4f}, adaptive_low_threshold={adaptive_low_threshold:.4f}, very_low={very_low_threshold:.4f}")
             
             low_norm_indices = []
             
-            # Only flag as suspicious if multiple criteria are met
+            # Only flag as suspicious if truly anomalous
             for i, norm in enumerate(norm_features):
                 is_suspicious = False
                 reasons = []
                 
-                # Check if gradient norm is extremely low (absolute threshold)
-                if norm < very_low_threshold:
+                # Check if gradient norm is essentially zero (< 5% of median)
+                if norm < very_low_threshold and norm_median > 0:
                     is_suspicious = True
-                    reasons.append(f"extremely low norm ({norm:.4f} < {very_low_threshold:.4f})")
+                    reasons.append(f"essentially zero norm ({norm:.4f} < {very_low_threshold:.4f}, only {norm/norm_median*100:.1f}% of median)")
                 
-                # Check if it's significantly below the distribution AND other clients have normal norms
-                elif norm < low_norm_threshold and len(norm_features) > 1:
-                    # Only suspicious if there's significant variation in norms
-                    max_norm = np.max(norm_features)
-                    if max_norm > 2.0 * norm:  # Other clients have much higher norms
-                        is_suspicious = True
-                        reasons.append(f"significantly below distribution ({norm:.4f} < {low_norm_threshold:.4f})")
+                # Check if it's a statistical outlier below the distribution
+                elif norm < adaptive_low_threshold and norm < q1 and iqr > 0.001:
+                    # Only suspicious if it's a true outlier, not just slightly below average
+                    is_suspicious = True
+                    reasons.append(f"statistical outlier ({norm:.4f} < {adaptive_low_threshold:.4f})")
                 
-                # Additional check: if malicious score is also high, it's more likely to be an attack
-                if len(reasons) > 0 and malicious_scores is not None:
-                    client_malicious_score = malicious_scores[i].item()
-                    if client_malicious_score > 0.7:  # High malicious score
-                        is_suspicious = True
-                        reasons.append(f"high malicious score ({client_malicious_score:.4f})")
-                    elif client_malicious_score < 0.4:  # Low malicious score suggests honest client
-                        is_suspicious = False  # Override - likely honest with naturally low gradient
-                        reasons = [f"low malicious score ({client_malicious_score:.4f}) suggests honest client"]
+                # REMOVED: The problematic override based on malicious score
+                # The malicious score itself may be unreliable, so don't use it to override gradient-based detection
                 
-                if is_suspicious and len([r for r in reasons if "low malicious score" not in r]) > 0:
+                if is_suspicious:
                     low_norm_indices.append(i)
                     print(f"Detected client {i} as suspicious due to potential zero attack: {', '.join(reasons)}")
                     
@@ -402,9 +441,6 @@ class DualAttention(nn.Module):
                         sign_consistency = features[i, 4].item()
                         if sign_consistency < 0.1:
                             print(f"  Client {i} also has very low sign consistency: {sign_consistency:.4f} (confirms attack)")
-                elif not is_suspicious and norm < 0.1:
-                    # Log why we're NOT flagging this client
-                    print(f"Client {i} has low gradient norm ({norm:.4f}) but not flagged as suspicious: {', '.join(reasons)}")
             
             # Combine malicious indices from all methods
             malicious_indices = list(set(malicious_indices + high_norm_indices + low_norm_indices))
@@ -447,12 +483,13 @@ class DualAttention(nn.Module):
                         # For detection based on malicious score, apply standard penalty
                         distance_from_mean = (malicious_scores[idx] - mean_malicious) / (std_malicious + 1e-5)
                         
-                        # Cap distance at a reasonable value
-                        distance_from_mean = min(distance_from_mean, 3.0)
+                        # Cap distance at a reasonable value (keep as tensor)
+                        distance_from_mean = torch.clamp(distance_from_mean, max=3.0)
                         
                         # Scale penalty based on distance and penalty factor
+                        # Ensure we pass a tensor to torch.exp()
                         penalty = 1.0 - torch.exp(-distance_from_mean * MALICIOUS_PENALTY_FACTOR)
-                        penalty = min(penalty, torch.tensor(0.9).to(device))
+                        penalty = torch.clamp(penalty, max=0.9)
                         
                         # Apply penalty
                         old_weight = weights[idx].item()
