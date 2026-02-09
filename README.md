@@ -278,64 +278,28 @@ REVISION_QUICK_DATASETS = ['OASIS']  # Default; use --revision-dataset ALZHEIMER
 
 ---
 
-### **🔧 Server Deployment Instructions**
-
-#### **Files to Update on Server:**
+### **🔧 Reproducing Results**
 
 ```bash
-# 1. Pull latest code from GitHub
-cd /path/to/OptiGradTrust-3
-git pull
+# Clone the repository
+git clone https://github.com/mohammadkarami79/OptiGradTrust.git
+cd OptiGradTrust
 
-# 2. Required files (already in repo):
-#    - run_optimized_experiments.py (main experiment script)
-#    - run_all_experiments.py (helper functions)
-#    - federated_learning/ (updated modules)
-#    - oasis_cross-sectional.xlsx (OASIS demographics)
+# Install dependencies
+pip install -r requirements.txt
+
+# Ensure datasets are in place:
+#   - OASIS: oasis_cross-sectional_disc1/disc1/ (with oasis_cross-sectional.xlsx)
+#   - ALZHEIMER: data/alzheimer/ (train/ and test/ with class subdirectories)
+
+# Run OASIS experiments (all 7 phases)
+nohup python run_optimized_experiments.py --revision-quick --epochs 8 > revision_oasis.log 2>&1 &
+
+# After OASIS completes, run ALZHEIMER (Phase 1 only)
+nohup python run_optimized_experiments.py --revision-quick --revision-dataset ALZHEIMER --epochs 8 --phase 1 > revision_alzheimer.log 2>&1 &
 ```
 
-#### **Server Commands:**
-
-```bash
-# Step 1: Navigate to project directory
-cd /home/gpu/FLBrain/OptiGradTrust-3
-
-# Step 2: Activate environment
-conda activate optigrad_py311  # or your environment name
-
-# Step 3: Run OASIS experiments
-nohup python run_optimized_experiments.py --revision-quick --epochs 8 > revision_quick.log 2>&1 &
-
-# Step 4: Monitor progress
-tail -f revision_quick.log
-
-# Step 5: After OASIS completes, run ALZHEIMER
-nohup python run_optimized_experiments.py --revision-quick --revision-dataset ALZHEIMER --epochs 8 --phase 1 > revision_quick_ALZHEIMER.log 2>&1 &
-
-# Step 6: Monitor ALZHEIMER progress
-tail -f revision_quick_ALZHEIMER.log
-```
-
-#### **Check Running Processes:**
-
-```bash
-# View running Python processes
-ps aux | grep python
-
-# Stop a process if needed
-kill <PID>
-
-# View last 100 lines of log
-tail -100 revision_quick.log
-```
-
----
-
-### **📖 Additional Documentation**
-
-- **Detailed Experiment Design**: See `REVISION_EXPERIMENTS_REPORT.md` (local only, not on GitHub)
-- **Configuration Details**: See `run_optimized_experiments.py` header comments
-- **Statistical Methods**: See `run_all_experiments.py` → `compute_statistics()`
+For configuration details, see the header comments in `run_optimized_experiments.py`.
 
 ---
 
@@ -773,7 +737,7 @@ For questions, issues, or collaboration opportunities regarding OptiGradTrust:
 - 📊 **Multi-domain validation** across vision (MNIST 99.41%), computer vision (CIFAR-10 82.44%), and medical imaging (Alzheimer's MRI 96.61%)
 - ⚡ **FedBN-Prox optimization** achieving 26-round convergence vs 30 for FedBN
 
-**Last Updated**: August 2025  
-**Version**: 3.0.0 - OptiGradTrust Release  
-**Paper Status**: Under Review  
+**Last Updated**: February 2026  
+**Version**: 3.1.0 - OptiGradTrust Revision Release  
+**Paper Status**: Under Revision  
 **Authors**: Mohammad Karami, Fatemeh Ghassemi, Hamed Kebriaei, Hamid Azadegan 
