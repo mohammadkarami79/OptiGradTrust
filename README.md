@@ -142,73 +142,200 @@ python -m federated_learning.test_basic
 We have conducted comprehensive revision experiments addressing all reviewer feedback with:
 - ✅ **Real Clinical Data**: OASIS (real patient MRI scans) + ALZHEIMER (Kaggle medical dataset)
 - ✅ **Statistical Validation**: n=5 random seeds with mean±std and 95% confidence intervals
-- ✅ **Strong Attacks**: 40% malicious clients, 30× gradient scaling, 90% label flipping
-- ✅ **Extended Baselines**: FedAvg, Krum, FLTrust, **TRFA** (new)
-- ✅ **Complete Coverage**: 225 experiments across both datasets
+- ✅ **Strong Attacks**: 40% malicious clients, 30× gradient scaling, 15× noise, 90% label flipping
+- ✅ **Extended Baselines**: FedAvg, Krum, FLTrust (TRFA planned)
+- ✅ **Complete Coverage**: 7 phases covering all reviewer requirements
 
 ### **Quick Start: Reproduce Our Revision Results**
 
-#### **Run 1: OASIS Dataset (Complete Suite - ~18-24 hours)**
+We provide **two main experiment scripts** for running revision experiments:
+
+#### **📋 Main Experiment Files**
+
+1. **`run_optimized_experiments.py`** - Complete revision experiment suite
+   - Runs all 7 phases: Clinical validation, Scalability, Baselines, RL Sensitivity, Ablation, τ Sensitivity, Extreme Imbalance
+   - Supports both OASIS and ALZHEIMER datasets
+   - Uses strong attack configuration for clear baseline differentiation
+   - n=5 seeds for statistical rigor
+
+2. **`run_all_experiments.py`** - Supporting functions and utilities
+   - Helper functions for experiments
+   - Statistical analysis tools
+   - Result aggregation and reporting
+
+---
+
+### **🔬 How to Run Experiments**
+
+#### **Step 1: OASIS Dataset (Complete Suite - ~18-24 hours)**
+
 ```bash
-# Runs all phases: Clinical, Scalability, Baselines, Ablation, Extreme Imbalance
+# Clone and setup
+git clone https://github.com/mohammadkarami79/OptiGradTrust.git
+cd OptiGradTrust
+
+# Run complete OASIS experiments with all phases
 nohup python run_optimized_experiments.py --revision-quick --epochs 8 > revision_quick.log 2>&1 &
+
+# Monitor progress
 tail -f revision_quick.log
 ```
 
-**This executes:**
-- **Phase 1**: OASIS clinical experiments (40 experiments: 2 distributions × 4 attacks × 5 seeds)
-- **Phase 2**: Scalability tests (10 experiments: 2 client counts × 5 seeds)
-- **Phase 3**: Baseline comparison (100 experiments: 5 methods × 4 attacks × 5 seeds)
-- **Phase 5**: Component ablation (25 experiments: 5 configs × 5 seeds)
-- **Phase 7**: Extreme class imbalance (10 experiments: 2 configs × 5 seeds)
+**This runs 7 phases (~185 experiments):**
+- **Phase 1**: OASIS clinical validation (40 exp: 2 distributions × 4 attacks × 5 seeds)
+- **Phase 2**: Scalability tests (10 exp: 2 client counts × 5 seeds)  
+- **Phase 3**: Baseline comparison (80 exp: 4 methods × 4 attacks × 5 seeds)
+- **Phase 4**: RL parameter sensitivity (25 exp: 5 configs × 5 seeds)
+- **Phase 5**: Component ablation (20 exp: 4 configs × 5 seeds)
+- **Phase 6**: τ coefficient sensitivity (15 exp: 3 configs × 5 seeds)
+- **Phase 7**: Extreme class imbalance (10 exp: 2 configs × 5 seeds)
 
-#### **Run 2: ALZHEIMER Dataset (Phase 1 Only - ~4-6 hours)**
+---
+
+#### **Step 2: ALZHEIMER Dataset (Phase 1 Only - ~4-6 hours)**
+
 ```bash
 # After OASIS completes, run ALZHEIMER for second dataset validation
 nohup python run_optimized_experiments.py --revision-quick --revision-dataset ALZHEIMER --epochs 8 --phase 1 > revision_quick_ALZHEIMER.log 2>&1 &
+
+# Monitor progress
 tail -f revision_quick_ALZHEIMER.log
 ```
 
-**This executes:**
-- **Phase 1**: ALZHEIMER clinical experiments (40 experiments with same config as OASIS)
+**This runs Phase 1 only (~40 experiments):**
+- **Phase 1**: ALZHEIMER clinical validation (40 exp: 2 distributions × 4 attacks × 5 seeds)
 
-### **View Results**
+**Note:** Only Phase 1 is run for ALZHEIMER because other phases (scalability, ablation, etc.) are dataset-independent and already covered by OASIS experiments.
 
-After experiments complete, results are organized in separate directories:
+---
+
+### **📊 View Results**
+
+Results are organized in **separate directories** to prevent overwriting:
 
 ```
 results/
 └── reviewer_experiments/
-    ├── oasis/                           # OASIS experiment results
-    │   ├── OPTIMIZED_COMPLETE_<timestamp>.json
-    │   ├── optimized_log_<timestamp>.txt
-    │   └── (individual phase result files)
-    └── alzheimer/                       # ALZHEIMER experiment results
-        ├── OPTIMIZED_ALZHEIMER_<timestamp>.json
-        └── optimized_log_<timestamp>.txt
+    ├── oasis/                                    # OASIS results
+    │   ├── OPTIMIZED_COMPLETE_<timestamp>.json  # All phases combined
+    │   ├── optimized_log_<timestamp>.txt        # Detailed logs
+    │   ├── phase1_oasis_clinical_<timestamp>.json
+    │   ├── phase2_scalability_<timestamp>.json
+    │   ├── phase3_baselines_<timestamp>.json
+    │   ├── phase4_rl_sensitivity_<timestamp>.json
+    │   ├── phase5_ablation_<timestamp>.json
+    │   ├── phase6_tau_sensitivity_<timestamp>.json
+    │   └── phase7_extreme_imbalance_<timestamp>.json
+    └── alzheimer/                                # ALZHEIMER results
+        ├── OPTIMIZED_ALZHEIMER_<timestamp>.json # Phase 1 only
+        └── optimized_log_<timestamp>.txt         # Detailed logs
 ```
 
-### **Result Files Contain:**
-- Mean accuracy ± standard deviation
-- 95% confidence intervals
-- Min/Max values
-- Per-scenario statistics (e.g., `OASIS_IID_scaling_attack`, `ALZHEIMER_Dirichlet_0.5_noise_attack`)
+### **📈 Result File Format**
 
-### **Key Configuration:**
+Each JSON result file contains per-scenario statistics:
+
+```json
+{
+  "OASIS_IID_scaling_attack": {
+    "mean": 0.7234,
+    "std": 0.0123,
+    "ci_95_lower": 0.7112,
+    "ci_95_upper": 0.7356,
+    "min": 0.7089,
+    "max": 0.7401,
+    "n": 5
+  },
+  "ALZHEIMER_Dirichlet_0.5_noise_attack": {
+    "mean": 0.6892,
+    "std": 0.0156,
+    ...
+  }
+}
+```
+
+---
+
+### **⚙️ Key Configuration (Strong Attacks for Clear Baseline Separation)**
+
 ```python
-# Strong attack for clear baseline separation
-ATTACK_SEVERITY = {
-    'malicious_ratio': 0.4,      # 40% malicious clients
-    'scaling_factor': 30.0,       # 30× gradient scaling
-    'noise_factor': 15.0,         # Very high noise
-    'flip_probability': 0.9       # 90% label flipping
+# Attack severity configuration
+ATTACK_SEVERITY_CONFIGS = {
+    'revision': {
+        'malicious_ratio': 0.4,       # 40% malicious clients
+        'scaling_factor': 30.0,        # 30× gradient scaling
+        'noise_factor': 15.0,          # 15× noise magnitude
+        'flip_probability': 0.9        # 90% label flipping
+    }
 }
 
 # Statistical rigor
-SEEDS = [42, 123, 456, 789, 1024]  # n=5 seeds
+REVISION_QUICK_SEEDS = [42, 123, 456, 789, 1024]  # n=5 seeds
+
+# Datasets
+REVISION_QUICK_DATASETS = ['OASIS']  # Default; use --revision-dataset ALZHEIMER for second dataset
 ```
 
-For detailed experiment design, see [`REVISION_EXPERIMENTS_REPORT.md`](REVISION_EXPERIMENTS_REPORT.md).
+---
+
+### **🔧 Server Deployment Instructions**
+
+#### **Files to Update on Server:**
+
+```bash
+# 1. Pull latest code from GitHub
+cd /path/to/OptiGradTrust-3
+git pull
+
+# 2. Required files (already in repo):
+#    - run_optimized_experiments.py (main experiment script)
+#    - run_all_experiments.py (helper functions)
+#    - federated_learning/ (updated modules)
+#    - oasis_cross-sectional.xlsx (OASIS demographics)
+```
+
+#### **Server Commands:**
+
+```bash
+# Step 1: Navigate to project directory
+cd /home/gpu/FLBrain/OptiGradTrust-3
+
+# Step 2: Activate environment
+conda activate optigrad_py311  # or your environment name
+
+# Step 3: Run OASIS experiments
+nohup python run_optimized_experiments.py --revision-quick --epochs 8 > revision_quick.log 2>&1 &
+
+# Step 4: Monitor progress
+tail -f revision_quick.log
+
+# Step 5: After OASIS completes, run ALZHEIMER
+nohup python run_optimized_experiments.py --revision-quick --revision-dataset ALZHEIMER --epochs 8 --phase 1 > revision_quick_ALZHEIMER.log 2>&1 &
+
+# Step 6: Monitor ALZHEIMER progress
+tail -f revision_quick_ALZHEIMER.log
+```
+
+#### **Check Running Processes:**
+
+```bash
+# View running Python processes
+ps aux | grep python
+
+# Stop a process if needed
+kill <PID>
+
+# View last 100 lines of log
+tail -100 revision_quick.log
+```
+
+---
+
+### **📖 Additional Documentation**
+
+- **Detailed Experiment Design**: See `REVISION_EXPERIMENTS_REPORT.md` (local only, not on GitHub)
+- **Configuration Details**: See `run_optimized_experiments.py` header comments
+- **Statistical Methods**: See `run_all_experiments.py` → `compute_statistics()`
 
 ---
 
