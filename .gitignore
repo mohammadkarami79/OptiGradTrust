@@ -101,6 +101,7 @@ training_progress_*.png
 
 # Internal revision documentation (keep locally, exclude from GitHub)
 REVISION_EXPERIMENTS_REPORT.md
+SERVER_INSTRUCTIONS.md
 
 # Old experimental results (will be replaced with new validated results)
 results/oasis_experiments/
