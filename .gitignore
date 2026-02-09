@@ -99,6 +99,17 @@ comprehensive_validation_*.json
 training_metrics_*.pt
 training_progress_*.png
 
+# Internal revision documentation (keep locally, exclude from GitHub)
+REVISION_EXPERIMENTS_REPORT.md
+SERVER_INSTRUCTIONS.md
+
+# Old experimental results (will be replaced with new validated results)
+results/oasis_experiments/
+results/final_paper_submission_ready/
+results/final_paper_results/
+results/final_optimized_results/
+results/non_iid_experiments/
+
 # OS generated files
 .DS_Store
 .DS_Store?
