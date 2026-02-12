@@ -6,6 +6,7 @@ import numpy as np
 from federated_learning.config.config import *
 from federated_learning.data.alzheimer_dataset import load_alzheimer_dataset, download_alzheimer_dataset
 from federated_learning.data.cifar_dataset import load_cifar10_dataset
+from federated_learning.data.oasis_dataset import load_oasis_dataset
 
 class LabelFlippingDataset(Dataset):
     """
@@ -290,6 +291,17 @@ def load_dataset():
         train_dataset, test_dataset, num_classes, input_channels = load_alzheimer_dataset()
     elif DATASET == 'CIFAR10':
         train_dataset, test_dataset, num_classes, input_channels = load_cifar10_dataset()
+    elif DATASET == 'OASIS':
+        # Access config at runtime so configure_for_dataset() paths are picked up
+        import federated_learning.config.config as config
+        oasis_root = getattr(config, 'OASIS_DATA_ROOT', 'oasis_cross-sectional_disc1/disc1')
+        oasis_demographics = getattr(config, 'OASIS_DEMOGRAPHICS_CSV', None)
+        oasis_seed = getattr(config, 'RANDOM_SEED', 42)
+        train_dataset, test_dataset, num_classes, input_channels = load_oasis_dataset(
+            root_dir=oasis_root,
+            demographics_csv=oasis_demographics,
+            random_seed=oasis_seed
+        )
     else:
         raise ValueError(f"Unknown dataset: {DATASET}")
     

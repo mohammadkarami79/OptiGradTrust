@@ -114,6 +114,12 @@ ALZHEIMER_DATA_DIR = './data/alzheimer'
 ALZHEIMER_IMG_SIZE = 224          # Size to resize images to
 ALZHEIMER_CLASSES = 4             # Number of classes
 
+# OASIS-1 dataset configuration
+OASIS_DATA_ROOT = './oasis_cross-sectional_disc1/disc1'
+OASIS_DEMOGRAPHICS_CSV = None     # Path to demographics CSV/XLSX (optional)
+OASIS_IMG_SIZE = 224              # Standard size for ResNet
+OASIS_CLASSES = 4                 # Nondemented, VeryMildDementia, MildDementia, ModerateDementia
+
 # CIFAR-10 specific settings
 CIFAR_IMG_SIZE = 32               # CIFAR-10 images are 32x32
 CIFAR_CLASSES = 10                # 10 classes in CIFAR-10

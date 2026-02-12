@@ -60,6 +60,8 @@ def create_client_datasets(train_dataset, num_clients=None, root_size=None, iid=
         num_classes = 10
     elif DATASET == 'ALZHEIMER':
         num_classes = ALZHEIMER_CLASSES
+    elif DATASET == 'OASIS':
+        num_classes = 4  # Nondemented, VeryMildDementia, MildDementia, ModerateDementia
     else:
         # Try to infer from dataset
         if hasattr(train_dataset, 'targets'):
