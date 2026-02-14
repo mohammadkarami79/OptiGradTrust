@@ -14,6 +14,13 @@ Federated Learning (FL) enables collaborative model training across distributed 
 
 **Index Terms—**Federated Learning, Byzantine Attacks, Reinforcement Learning, Non-IID Distribution, Medical Applications, Gradient Fingerprinting, Trust Weighting, Robust Aggregation
 
+### Results & Reproducibility (paper revision)
+
+- **Reported results** (OASIS and ALZHEIMER, n=5 seeds, strong attacks) are in **[`results/reviewer_experiments/`](results/reviewer_experiments/)**:
+  - **`oasis/`** — OASIS (real clinical MRI): full suite (clinical, scalability, baselines, ablation, extreme imbalance).
+  - **`alzheimer/`** — ALZHEIMER (medical MRI): Phase 1 clinical validation.
+- **Format**: Each scenario has `mean`, `std`, `n`, and 95% CI; see [results/reviewer_experiments/README.md](results/reviewer_experiments/README.md) for description and reproduction commands.
+
 ## Key Features
 
 ### 🛡️ **OptiGradTrust Core Innovations**
@@ -135,6 +142,13 @@ python main.py --test-mode
 python -m federated_learning.test_basic
 ```
 
+### Datasets (paper revision experiments)
+
+- **OASIS**: Place OASIS cross-sectional data so the code can find it (e.g. `oasis_cross-sectional_disc1/disc1/` with `oasis_cross-sectional.xlsx` as referenced in the code).
+- **ALZHEIMER**: Place data under `data/alzheimer/` with `train/` and `test/` subdirectories and class folders.
+
+Exact paths are in `run_optimized_experiments.py` and dataset loaders. Data files are not included in the repository.
+
 ## 🚀 Revision Experiments (February 2026) - OASIS & ALZHEIMER Datasets
 
 ### **New: Paper Revision with Statistical Rigor**
@@ -211,24 +225,15 @@ tail -f revision_quick_ALZHEIMER.log
 
 ### **📊 View Results**
 
-Results are organized in **separate directories** to prevent overwriting:
+Results are under **`results/reviewer_experiments/`** (see [results/reviewer_experiments/README.md](results/reviewer_experiments/README.md) for format and reproduction):
 
 ```
-results/
-└── reviewer_experiments/
-    ├── oasis/                                    # OASIS results
-    │   ├── OPTIMIZED_COMPLETE_<timestamp>.json  # All phases combined
-    │   ├── optimized_log_<timestamp>.txt        # Detailed logs
-    │   ├── phase1_oasis_clinical_<timestamp>.json
-    │   ├── phase2_scalability_<timestamp>.json
-    │   ├── phase3_baselines_<timestamp>.json
-    │   ├── phase4_rl_sensitivity_<timestamp>.json
-    │   ├── phase5_ablation_<timestamp>.json
-    │   ├── phase6_tau_sensitivity_<timestamp>.json
-    │   └── phase7_extreme_imbalance_<timestamp>.json
-    └── alzheimer/                                # ALZHEIMER results
-        ├── OPTIMIZED_ALZHEIMER_<timestamp>.json # Phase 1 only
-        └── optimized_log_<timestamp>.txt         # Detailed logs
+results/reviewer_experiments/
+├── README.md                 # Result format and how to reproduce
+├── oasis/                    # OASIS (real clinical) — full suite
+│   └── OPTIMIZED_COMPLETE_<timestamp>.json  (+ phase JSONs when present)
+└── alzheimer/                # ALZHEIMER — Phase 1 clinical validation
+    └── OPTIMIZED_ALZHEIMER_<timestamp>.json
 ```
 
 ### **📈 Result File Format**
