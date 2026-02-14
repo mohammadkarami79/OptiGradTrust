@@ -80,6 +80,8 @@ results/*
 # Do not commit large run logs (keep repo lean)
 results/reviewer_experiments/**/experiment_log_*.txt
 results/reviewer_experiments/**/optimized_log_*.txt
+# Internal run reports (not for publication)
+results/reviewer_experiments/**/FINAL_REPORT_*.md
 
 # ============================================
 # Logs and output
@@ -136,6 +138,11 @@ verify_before_run.py
 # Internal experiment runs (not for publication)
 new_experiment/
 new_results/
+research_plots/
+FedAlzheimers-OptComparison/
+
+# Internal / deployment docs (not for public repo)
+ALZHEIMER_DEPLOY_GUIDE.md
 
 # ============================================
 # Old/unused config files

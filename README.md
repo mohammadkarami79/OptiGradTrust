@@ -4,6 +4,16 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red.svg)](https://pytorch.org/)
 
+## Table of contents
+
+- [Overview](#overview)
+- [Results & Reproducibility](#results--reproducibility-paper-revision)
+- [Getting started](#installation) (Installation, Datasets, Reproduce paper results)
+- [Revision experiments](#-revision-experiments-february-2026---oasis--alzheimer-datasets) (OASIS & ALZHEIMER)
+- [Key features & architecture](#key-features)
+- [Configuration & evaluation](#optigradtrust-configuration-guide)
+- [Citation](#citation)
+
 ## Overview
 
 **OptiGradTrust** is a novel Byzantine-robust federated learning framework that addresses the critical challenges of malicious client detection and data heterogeneity in distributed machine learning environments. Our comprehensive defense system evaluates gradient updates through a novel **six-dimensional fingerprint** and employs a **hybrid RL-attention module** for adaptive trust scoring, while introducing **FedBN-Prox (FedBN-P)** to optimize convergence under non-IID conditions.
@@ -149,6 +159,17 @@ python -m federated_learning.test_basic
 
 Exact paths are in `run_optimized_experiments.py` and dataset loaders. Data files are not included in the repository.
 
+### Repository structure
+
+| Path | Description |
+|------|-------------|
+| `main.py` | Main entry point for single runs (MNIST, CIFAR-10, Alzheimer's; config-driven). |
+| `run_optimized_experiments.py` | **Paper reproduction**: full revision suite (OASIS / ALZHEIMER, n=5 seeds, strong attacks). |
+| `run_all_experiments.py` | Experiment helpers, statistics, and reporting (used by `run_optimized_experiments.py`). |
+| `federated_learning/` | Core library: training, aggregation, models, data loaders, config. |
+| `results/reviewer_experiments/` | Published results (OASIS & ALZHEIMER) and [result format & reproduction](results/reviewer_experiments/README.md). |
+| `requirements.txt` | Python dependencies (PyTorch, scipy, pandas, etc.). |
+
 ## 🚀 Revision Experiments (February 2026) - OASIS & ALZHEIMER Datasets
 
 ### **New: Paper Revision with Statistical Rigor**
@@ -157,8 +178,8 @@ We have conducted comprehensive revision experiments addressing all reviewer fee
 - ✅ **Real Clinical Data**: OASIS (real patient MRI scans) + ALZHEIMER (Kaggle medical dataset)
 - ✅ **Statistical Validation**: n=5 random seeds with mean±std and 95% confidence intervals
 - ✅ **Strong Attacks**: 40% malicious clients, 30× gradient scaling, 15× noise, 90% label flipping
-- ✅ **Extended Baselines**: FedAvg, Krum, FLTrust (TRFA planned)
-- ✅ **Complete Coverage**: 7 phases covering all reviewer requirements
+- ✅ **Extended Baselines**: FedAvg, Krum, FLTrust, TRFA
+- ✅ **Coverage**: Clinical validation, scalability, baselines, ablation, extreme imbalance (phases 1–3, 5, 7)
 
 ### **Quick Start: Reproduce Our Revision Results**
 
@@ -166,9 +187,9 @@ We provide **two main experiment scripts** for running revision experiments:
 
 #### **📋 Main Experiment Files**
 
-1. **`run_optimized_experiments.py`** - Complete revision experiment suite
-   - Runs all 7 phases: Clinical validation, Scalability, Baselines, RL Sensitivity, Ablation, τ Sensitivity, Extreme Imbalance
-   - Supports both OASIS and ALZHEIMER datasets
+1. **`run_optimized_experiments.py`** — Paper reproduction script
+   - With `--revision-quick`: Phases 1 (clinical), 2 (scalability), 3 (baselines), 5 (ablation), 7 (extreme imbalance)
+   - Supports OASIS and ALZHEIMER datasets
    - Uses strong attack configuration for clear baseline differentiation
    - n=5 seeds for statistical rigor
 
@@ -676,11 +697,13 @@ If you use OptiGradTrust in your research, please cite:
 ```bibtex
 @article{optigradtrust2025,
   title={OptiGradTrust: Byzantine-Robust Federated Learning with Multi-Feature Gradient Analysis and Reinforcement Learning-Based Trust Weighting},
-  author={Mohammad Karami, Fatemeh Ghassemi, Hamed Kebriaei, Hamid Azadegan},
+  author={Karami, Mohammad and Ghassemi, Fatemeh and Kebriaei, Hamed and Azadegan, Hamid},
   year={2025},
   keywords={Federated Learning, Byzantine Attacks, Reinforcement Learning, Non-IID Distribution, Medical Applications, Gradient Fingerprinting, Trust Weighting, Robust Aggregation}
 }
 ```
+
+A [CITATION.bib](CITATION.bib) file is included in the repository for easy import into reference managers.
 
 ### Key Research Contributions
 
