@@ -45,6 +45,7 @@ The paper validates OptiGradTrust on **four datasets** [paper, Table 1]: **MNIST
   - **`oasis/`** — OASIS (real clinical MRI): full suite (clinical, scalability, baselines, ablation, extreme imbalance).
   - **`alzheimer/`** — ALZHEIMER (medical MRI): Phase 1 clinical validation.
 - **Format**: Each scenario has `mean`, `std`, `n`, and 95% CI; see [results/reviewer_experiments/README.md](results/reviewer_experiments/README.md) for description and reproduction commands.
+- **Key results** (strengthened config, paper Table 4): OptiGradTrust achieves **67.88%** on OASIS (real clinical MRI) and **82.50%** on Alzheimer's MRI (mean over n=5 seeds), with scaling-attack detection F1≥0.98; scalability to 50 clients maintains accuracy (68.27%).
 
 ## Key Features
 
