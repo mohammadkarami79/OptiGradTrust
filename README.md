@@ -7,9 +7,11 @@
 ## Table of contents
 
 - [Overview](#overview)
-- [Results & Reproducibility](#results--reproducibility-paper-revision)
-- [Getting started](#installation) (Installation, Datasets, Reproduce paper results)
-- [Revision experiments](#-revision-experiments-february-2026---oasis--alzheimer-datasets) (OASIS & ALZHEIMER)
+- [Experiments & datasets](#experiments--datasets) (MNIST, CIFAR-10, OASIS, ALZHEIMER)
+- [Results & reproducibility](#results--reproducibility-paper-revision) (paper results + how to run)
+- [Getting started](#installation) (Installation, Datasets, Directory layout)
+- [Quick start](#quick-start) (MNIST, CIFAR-10, Alzheimer's — `main.py`)
+- [Revision experiments](#-revision-experiments-february-2026---oasis--alzheimer-datasets) (OASIS & ALZHEIMER — paper reproduction)
 - [Key features & architecture](#key-features)
 - [Configuration & evaluation](#optigradtrust-configuration-guide)
 - [Citation](#citation)
@@ -23,6 +25,19 @@
 Federated Learning (FL) enables collaborative model training across distributed medical institutions while preserving patient privacy, but remains vulnerable to Byzantine attacks and statistical heterogeneity. We present **OptiGradTrust**, a comprehensive defense framework that evaluates gradient updates through a novel six-dimensional fingerprint including VAE reconstruction error, cosine similarity metrics, L2 norm, sign-consistency ratio, and Monte Carlo Shapley value, which drive a hybrid RL-attention module for adaptive trust scoring. To address convergence challenges under data heterogeneity, we develop **FedBN-Prox (FedBN-P)**, combining Federated Batch Normalization with proximal regularization for optimal accuracy-convergence trade-offs. Extensive evaluation across MNIST, CIFAR-10, and Alzheimer's MRI datasets under various Byzantine attack scenarios demonstrates significant improvements over state-of-the-art defenses, achieving up to **+1.6 percentage points** over FLGuard under non-IID conditions while maintaining robust performance against diverse attack patterns through our adaptive learning approach.
 
 **Index Terms—**Federated Learning, Byzantine Attacks, Reinforcement Learning, Non-IID Distribution, Medical Applications, Gradient Fingerprinting, Trust Weighting, Robust Aggregation
+
+### Experiments & datasets
+
+The paper validates OptiGradTrust on **four datasets** [paper, Table 1]: **MNIST**, **CIFAR-10**, **Alzheimer's MRI** (Kaggle [34]), and **OASIS** (real clinical MRI [28]). The same Alzheimer's MRI dataset is evaluated under both the original configuration (Sections 2.2–2.4) and the strengthened revision configuration (Sections 2.5–2.8).
+
+| Use case | Datasets | How to run | Results |
+|----------|----------|------------|--------|
+| **Benchmark / proof-of-concept** (original config: 30% malicious, 10× scaling) | MNIST, CIFAR-10, Alzheimer's MRI | `main.py` (see [Quick start](#quick-start)) | Written to `results/` when you run |
+| **Clinical validation / revision** (strengthened config: 40% malicious, 30× scaling, n=5 seeds) | OASIS (real clinical), Alzheimer's MRI (re-evaluated) | `run_optimized_experiments.py` (see [Revision experiments](#-revision-experiments-february-2026---oasis--alzheimer-datasets)) | **[`results/reviewer_experiments/`](results/reviewer_experiments/)** — included for verification |
+
+- **MNIST & CIFAR-10**: No extra download; use `main.py --dataset MNIST` or `main.py --dataset CIFAR10`.
+- **Alzheimer's MRI**: Kaggle dataset; place under `data/alzheimer/` (train/test + class folders). Run via `main.py --dataset ALZHEIMER` (original) or revision script (strengthened).
+- **OASIS**: Real clinical MRI (OASIS cross-sectional [28]); see [Datasets](#datasets-paper-revision-experiments) for paths. Run via `run_optimized_experiments.py`.
 
 ### Results & Reproducibility (paper revision)
 
@@ -159,16 +174,41 @@ python -m federated_learning.test_basic
 
 Exact paths are in `run_optimized_experiments.py` and dataset loaders. Data files are not included in the repository.
 
-### Repository structure
+### Directory layout
+
+No need to move or rename folders — this is the intended layout. Entry points stay at the root; the core library lives in `federated_learning/`; all experiment outputs go under `results/`.
+
+```
+OptiGradTrust/
+├── main.py                      # Single runs: MNIST, CIFAR-10, Alzheimer's (config-driven)
+├── run_optimized_experiments.py # Paper reproduction: OASIS & ALZHEIMER (revision suite)
+├── run_all_experiments.py       # Helpers & stats (used by run_optimized_experiments.py)
+├── setup.py
+├── requirements.txt
+├── federated_learning/           # Core library (training, aggregation, models, data, config)
+│   ├── config/
+│   ├── data/
+│   ├── models/
+│   ├── training/
+│   └── utils/
+├── results/                     # All experiment outputs (gitignored except reviewer_experiments)
+│   └── reviewer_experiments/   # Paper results (OASIS & ALZHEIMER) — tracked for verification
+│       ├── README.md
+│       ├── oasis/
+│       └── alzheimer/
+└── data/                        # Datasets (gitignored; add MNIST/CIFAR cache, Alzheimer's, OASIS here)
+```
+
+### Repository structure (quick reference)
 
 | Path | Description |
 |------|-------------|
-| `main.py` | Main entry point for single runs (MNIST, CIFAR-10, Alzheimer's; config-driven). |
-| `run_optimized_experiments.py` | **Paper reproduction**: full revision suite (OASIS / ALZHEIMER, n=5 seeds, strong attacks). |
-| `run_all_experiments.py` | Experiment helpers, statistics, and reporting (used by `run_optimized_experiments.py`). |
+| `main.py` | **MNIST, CIFAR-10, Alzheimer's** — single runs, config-driven. |
+| `run_optimized_experiments.py` | **OASIS & ALZHEIMER** — paper reproduction (revision suite, n=5 seeds). |
+| `run_all_experiments.py` | Experiment helpers, statistics, reporting (used by the script above). |
 | `federated_learning/` | Core library: training, aggregation, models, data loaders, config. |
-| `results/reviewer_experiments/` | Published results (OASIS & ALZHEIMER) and [result format & reproduction](results/reviewer_experiments/README.md). |
-| `requirements.txt` | Python dependencies (PyTorch, scipy, pandas, etc.). |
+| `results/reviewer_experiments/` | **Published paper results** and [result format & reproduction](results/reviewer_experiments/README.md). |
+| `results/` | Other runs (from `main.py` or custom scripts) go here; not tracked in git. |
 
 ## 🚀 Revision Experiments (February 2026) - OASIS & ALZHEIMER Datasets
 
@@ -178,8 +218,8 @@ We have conducted comprehensive revision experiments addressing all reviewer fee
 - ✅ **Real Clinical Data**: OASIS (real patient MRI scans) + ALZHEIMER (Kaggle medical dataset)
 - ✅ **Statistical Validation**: n=5 random seeds with mean±std and 95% confidence intervals
 - ✅ **Strong Attacks**: 40% malicious clients, 30× gradient scaling, 15× noise, 90% label flipping
-- ✅ **Extended Baselines**: FedAvg, Krum, FLTrust, TRFA
-- ✅ **Coverage**: Clinical validation, scalability, baselines, ablation, extreme imbalance (phases 1–3, 5, 7)
+- ✅ **Baselines**: FedAvg, Krum, FLTrust (statistical comparison with paired t-tests, Cohen's d; paper Table 6)
+- ✅ **Coverage**: Clinical validation (OASIS, Alzheimer's MRI), scalability (10 and 50 clients), baselines, ablation, extreme imbalance (phases 1–3, 5, 7)
 
 ### **Quick Start: Reproduce Our Revision Results**
 
@@ -331,17 +371,21 @@ For configuration details, see the header comments in `run_optimized_experiments
 
 ## Quick Start
 
-### Basic Usage
+Use **`main.py`** for standard experiments on **MNIST**, **CIFAR-10**, or **Alzheimer's** (no OASIS/ALZHEIMER data needed). For paper reproduction (OASIS & ALZHEIMER), see [Revision experiments](#-revision-experiments-february-2026---oasis--alzheimer-datasets).
+
+### Basic usage (MNIST, CIFAR-10, Alzheimer's)
 ```bash
-# Run OptiGradTrust with default configuration (MNIST + CNN + FedBN-P)
+# Default: MNIST + CNN + FedBN-P
 python main.py
 
-# Run with different datasets and configurations
+# CIFAR-10 with ResNet18
 python main.py --dataset CIFAR10 --model RESNET18 --aggregation fedbn_prox
+
+# Alzheimer's MRI (requires data in data/alzheimer/)
 python main.py --dataset ALZHEIMER --model CNN --attack_type scaling
 
-# Run comprehensive OptiGradTrust evaluation
-python run_all_experiments.py
+# Quick validation (no full training)
+python main.py --test-mode
 ```
 
 ### Configuration Examples
@@ -596,9 +640,14 @@ python main.py --config custom_config.json --output results/custom/
 
 ## Results Organization
 
+When you run **`main.py`** (MNIST, CIFAR-10, Alzheimer's), outputs go under `results/experiments/`, `results/metrics/`, etc. **Paper results** (OASIS & ALZHEIMER) are in **[`results/reviewer_experiments/`](results/reviewer_experiments/)** and are tracked in the repo.
+
 ```
 results/
-├── experiments/          # Individual experiment results
+├── reviewer_experiments/ # Paper results (OASIS & ALZHEIMER) — tracked
+│   ├── oasis/
+│   └── alzheimer/
+├── experiments/         # From main.py (MNIST, CIFAR-10, etc.) — not tracked
 │   ├── mnist_cnn_fedbn_partial_scaling_20241203_140530/
 │   │   ├── config.json
 │   │   ├── metrics.json
