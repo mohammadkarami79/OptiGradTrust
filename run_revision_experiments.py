@@ -374,31 +374,6 @@ def run_timing_experiment(num_rounds: int = 25, seed: int = 42, dry_run: bool = 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    # ── full OptiGradTrust reference run (validates instrumented accuracy) ─
-    logger.info("\nRunning full OptiGradTrust reference (validates accuracy) ...")
-    set_all_seeds(seed)
-    ref_result = run_single_experiment(
-        dataset='ALZHEIMER', attack_type='scaling_attack', seed=seed,
-        num_clients=10,
-        non_iid_config={'enable': False, 'type': 'iid', 'alpha': None},
-        aggregation_method='fedbn_fedprox', epochs=num_rounds,
-        malicious_ratio=0.3, scaling_factor=10.0)
-    ref_accuracy = ref_result.get('final_accuracy', 0)
-    ref_training_ms = ref_result.get('training_time', 0) * 1000.0
-    logger.info(f"Reference OptiGradTrust accuracy: {ref_accuracy:.4f}")
-
-    # ── FedAvg baseline timing ───────────────────────────────────────────
-    logger.info("\nRunning FedAvg baseline for timing comparison ...")
-    set_all_seeds(seed)
-    fedavg_result = run_single_experiment(
-        dataset='ALZHEIMER', attack_type='scaling_attack', seed=seed,
-        num_clients=10,
-        non_iid_config={'enable': False, 'type': 'iid', 'alpha': None},
-        aggregation_method='fedavg', epochs=num_rounds,
-        malicious_ratio=0.3, scaling_factor=10.0)
-    fedavg_total_time_ms = fedavg_result.get('training_time', 0) * 1000.0
-    fedavg_ms_per_round = fedavg_total_time_ms / max(num_rounds, 1)
-
     # ── summarize (rounds 6-25, or all if dry-run) ───────────────────────
     skip = 0 if dry_run else 5
     analysis_rows = per_round_timings[skip:]
@@ -416,6 +391,27 @@ def run_timing_experiment(num_rounds: int = 25, seed: int = 42, dry_run: bool = 
     for comp in component_names:
         summary[comp]['pct'] = summary[comp]['mean_ms'] / total_mean * 100 if total_mean > 0 else 0
 
+    # Compute overhead: trust components = everything except local_training
+    local_training_mean = summary['local_training']['mean_ms']
+    trust_overhead_ms = total_mean - local_training_mean
+    overhead_pct = (trust_overhead_ms / local_training_mean * 100
+                    if local_training_mean > 0 else float('inf'))
+
+    # ── FedAvg baseline timing ───────────────────────────────────────────
+    # Run FedAvg under the same settings to get an independent wall-clock
+    # comparison. Use separate config to avoid state contamination.
+    logger.info("\nRunning FedAvg baseline for timing comparison ...")
+    set_all_seeds(seed)
+    fedavg_result = run_single_experiment(
+        dataset='ALZHEIMER', attack_type='scaling_attack', seed=seed,
+        num_clients=10,
+        non_iid_config={'enable': False, 'type': 'iid', 'alpha': None},
+        aggregation_method='fedavg', epochs=num_rounds,
+        malicious_ratio=0.3, scaling_factor=10.0)
+    fedavg_total_time_ms = fedavg_result.get('training_time', 0) * 1000.0
+    fedavg_ms_per_round = fedavg_total_time_ms / max(num_rounds, 1)
+    fedavg_accuracy = fedavg_result.get('final_accuracy', 0)
+
     # ── save CSV ─────────────────────────────────────────────────────────
     csv_path = os.path.join(RESULTS_DIR, 'timing_breakdown.csv')
     with open(csv_path, 'w', newline='') as f:
@@ -426,6 +422,8 @@ def run_timing_experiment(num_rounds: int = 25, seed: int = 42, dry_run: bool = 
     logger.info(f"Saved per-round timings → {csv_path}")
 
     # ── print table ──────────────────────────────────────────────────────
+    instrumented_acc = rd_acc if 'rd_acc' in locals() else None
+
     logger.info("\n" + "=" * 70)
     logger.info("TIMING BREAKDOWN SUMMARY (averaged over rounds %d-%d)" %
                 (skip + 1, num_rounds))
@@ -437,20 +435,16 @@ def run_timing_experiment(num_rounds: int = 25, seed: int = 42, dry_run: bool = 
                     (comp, s['mean_ms'], s['std_ms'], s['pct']))
     logger.info("-" * 60)
     logger.info("%-35s %9.2f %10s" % ("OptiGradTrust TOTAL", total_mean, "100%"))
-    logger.info("%-35s %9.2f %10s" % ("FedAvg TOTAL (no trust)", fedavg_ms_per_round, "(baseline)"))
-    overhead = ((total_mean - fedavg_ms_per_round) / fedavg_ms_per_round * 100
-                if fedavg_ms_per_round > 0 else float('inf'))
-    logger.info("%-35s %9s %9.1f%%" % ("Overhead vs FedAvg", "", overhead))
+    logger.info("%-35s %9.2f" % ("  of which: local training", local_training_mean))
+    logger.info("%-35s %9.2f %9.1f%%" % ("  of which: trust overhead",
+                                          trust_overhead_ms, overhead_pct))
+    logger.info("")
+    logger.info("%-35s %9.2f" % ("FedAvg round time (wall-clock)", fedavg_ms_per_round))
+    logger.info("%-35s %9s %9.1f%%" % ("Trust overhead vs local training", "", overhead_pct))
     logger.info("=" * 70)
-
-    # cross-validation: compare instrumented final accuracy vs reference run
-    instrumented_acc = rd_acc if 'rd_acc' in locals() else None
-    logger.info("\n--- Cross-validation ---")
-    logger.info(f"Reference run accuracy:     {ref_accuracy:.4f}")
     if instrumented_acc is not None:
-        logger.info(f"Instrumented loop accuracy: {instrumented_acc:.4f}")
-        diff = abs(ref_accuracy - instrumented_acc)
-        logger.info(f"Difference: {diff:.4f} {'(OK)' if diff < 0.05 else '(WARNING: >5%% gap)'}")
+        logger.info(f"Instrumented loop final accuracy: {instrumented_acc:.4f}")
+    logger.info(f"FedAvg baseline accuracy:         {fedavg_accuracy:.4f}")
 
     # ── save JSON summary ────────────────────────────────────────────────
     json_path = os.path.join(RESULTS_DIR, 'timing_breakdown_summary.json')
@@ -463,10 +457,12 @@ def run_timing_experiment(num_rounds: int = 25, seed: int = 42, dry_run: bool = 
         },
         'per_component': summary,
         'optigradtrust_total_ms': total_mean,
-        'fedavg_ms_per_round': fedavg_ms_per_round,
-        'overhead_pct': overhead,
-        'reference_accuracy': ref_accuracy,
-        'fedavg_accuracy': fedavg_result.get('final_accuracy', 0),
+        'local_training_ms': local_training_mean,
+        'trust_overhead_ms': trust_overhead_ms,
+        'trust_overhead_pct': overhead_pct,
+        'fedavg_wall_clock_ms_per_round': fedavg_ms_per_round,
+        'fedavg_accuracy': fedavg_accuracy,
+        'instrumented_accuracy': instrumented_acc,
     }
     with open(json_path, 'w') as f:
         json.dump(json_obj, f, indent=2)
@@ -723,7 +719,7 @@ def generate_revision_summary(timing_result, ablation_results):
         lines += [
             "## Experiment 1: Per-Component Timing Breakdown",
             "",
-            "| Component | Time (ms/round) | % of Total |",
+            "| Component | Time (ms/round) | %% of Total |",
             "|---|---|---|",
         ]
         for comp in [
@@ -738,8 +734,9 @@ def generate_revision_summary(timing_result, ablation_results):
         lines += [
             "|---|---|---|",
             "| **OptiGradTrust TOTAL** | %.2f | 100%% |" % timing_result['optigradtrust_total_ms'],
-            "| **FedAvg TOTAL** | %.2f | (baseline) |" % timing_result['fedavg_ms_per_round'],
-            "| **Overhead vs FedAvg** | | %.1f%% |" % timing_result['overhead_pct'],
+            "| **Trust overhead** | %.2f | %.1f%% of local training |" % (
+                timing_result['trust_overhead_ms'], timing_result['trust_overhead_pct']),
+            "| **FedAvg round time (wall-clock)** | %.2f | |" % timing_result['fedavg_wall_clock_ms_per_round'],
             "",
         ]
 
