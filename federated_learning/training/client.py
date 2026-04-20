@@ -116,6 +116,95 @@ class Attack:
             noise = torch.randn_like(gradient, device=device) * grad_std * noise_factor
             modified_grad = gradient + noise
             attack_name = f"Noise attack (factor: {noise_factor:.1f})"
+
+        elif self.attack_type == 'gaussian_noise_injection':
+            # Gaussian noise injection with absolute sigma (not relative to gradient std)
+            # Used in R2 ablation experiments (sigma=15.0 by default)
+            sigma = getattr(self, 'sigma', 15.0)
+            if hasattr(self, 'attack_params') and self.attack_params:
+                sigma = self.attack_params.get('sigma', sigma)
+            noise = torch.randn_like(gradient, device=device) * sigma
+            modified_grad = gradient + noise
+            attack_name = f"Gaussian noise injection (sigma={sigma:.1f})"
+
+        elif self.attack_type == 'adaptive_vae_attack':
+            # R3-D: VAE-aware adaptive attack.
+            # PGD inner loop in gradient space that minimises
+            #     loss = alpha * ||VAE(g') - g'||^2 + beta * (1 - cos(g', target))
+            # where target = -gradient * scaling_factor (the malicious direction).
+            # Runs only if the server has injected a VAE snapshot into
+            # self.vae_snapshot; otherwise falls back to stealth-scaling.
+            factor = getattr(self, 'scaling_factor', scaling_factor)
+            if hasattr(self, 'attack_params') and self.attack_params:
+                factor = self.attack_params.get('scaling_factor', factor)
+            stealth_ratio = (self.attack_params.get('stealth_ratio', 0.5)
+                             if hasattr(self, 'attack_params') and self.attack_params else 0.5)
+            n_steps = (self.attack_params.get('adaptive_steps', 20)
+                       if hasattr(self, 'attack_params') and self.attack_params else 20)
+            step_size = (self.attack_params.get('adaptive_step_size', 0.05)
+                         if hasattr(self, 'attack_params') and self.attack_params else 0.05)
+            alpha_vae = (self.attack_params.get('alpha_vae', 1.0)
+                         if hasattr(self, 'attack_params') and self.attack_params else 1.0)
+            beta_dir = (self.attack_params.get('beta_dir', 0.5)
+                        if hasattr(self, 'attack_params') and self.attack_params else 0.5)
+
+            vae_snap = getattr(self, 'vae_snapshot', None)
+            target = -gradient * factor
+            eps_radius = 5.0 * original_norm
+
+            if vae_snap is not None:
+                # PGD in gradient space against the VAE
+                try:
+                    vae_snap.eval()
+                    for p in vae_snap.parameters():
+                        p.requires_grad_(False)
+
+                    g_adv = gradient.clone().detach()
+                    for _ in range(n_steps):
+                        g_adv = g_adv.detach().requires_grad_(True)
+                        recon, _, _ = vae_snap(g_adv.unsqueeze(0))
+                        recon = recon.squeeze(0)
+                        recon_loss = torch.mean((recon - g_adv) ** 2)
+                        cos = F.cosine_similarity(g_adv.unsqueeze(0),
+                                                  target.unsqueeze(0)).squeeze()
+                        align_loss = 1.0 - cos
+                        loss = alpha_vae * recon_loss + beta_dir * align_loss
+                        g_grad = torch.autograd.grad(loss, g_adv,
+                                                    retain_graph=False,
+                                                    create_graph=False)[0]
+                        g_adv = g_adv.detach() - step_size * g_grad
+                        # project into an L2 ball of radius eps_radius around the benign gradient
+                        delta = g_adv - gradient
+                        dn = torch.norm(delta).item() + 1e-12
+                        if dn > eps_radius:
+                            delta = delta * (eps_radius / dn)
+                            g_adv = gradient + delta
+
+                    modified_grad = g_adv.detach()
+                    attack_name = (f"Adaptive VAE attack "
+                                   f"(PGD, steps={n_steps}, factor={factor:.1f})")
+                except Exception as _exc:
+                    # Graceful fallback if the VAE forward fails mid-attack
+                    print(f"[adaptive_vae_attack] VAE-PGD failed ({_exc}); "
+                          "falling back to stealth-scaling")
+                    blended = (1.0 - stealth_ratio) * gradient + stealth_ratio * target
+                    bn = torch.norm(blended) + 1e-12
+                    on = torch.norm(gradient) + 1e-12
+                    if bn > 2.0 * on:
+                        blended = blended * (2.0 * on / bn)
+                    modified_grad = blended
+                    attack_name = (f"Adaptive VAE attack (fallback stealth, "
+                                   f"ratio={stealth_ratio:.2f})")
+            else:
+                # No VAE available → stealth-scaling variant (still adaptive vs. norm-based detection)
+                blended = (1.0 - stealth_ratio) * gradient + stealth_ratio * target
+                bn = torch.norm(blended) + 1e-12
+                on = torch.norm(gradient) + 1e-12
+                if bn > 2.0 * on:
+                    blended = blended * (2.0 * on / bn)
+                modified_grad = blended
+                attack_name = (f"Adaptive VAE attack (no VAE; stealth-scaling, "
+                               f"ratio={stealth_ratio:.2f})")
             
         elif self.attack_type == 'min_max_attack':
             # Amplify largest elements and reduce smallest ones
@@ -591,9 +680,24 @@ class Client:
             original_gradient = client_gradient.clone()
             original_norm = torch.norm(original_gradient).item()
             print(f"Client {self.client_id} (MALICIOUS): Original gradient norm before attack: {original_norm:.4f}")
-                
-        # If this is a malicious client, apply the gradient attack
-        if self.is_malicious and hasattr(self, 'attack'):
+
+        # Determine whether to apply the attack this round (dynamic attack schedule)
+        _apply_attack_this_round = True
+        if self.is_malicious and hasattr(self, 'dynamic_attack_schedule') and self.dynamic_attack_schedule:
+            schedule = self.dynamic_attack_schedule
+            if schedule == 'phase_transition':
+                _transition_round = getattr(self, 'phase_transition_round', 12)
+                _apply_attack_this_round = (round_idx >= _transition_round)
+                phase_label = "ATTACK" if _apply_attack_this_round else "BENIGN"
+                print(f"Client {self.client_id} (MALICIOUS): Round {round_idx + 1} → {phase_label} "
+                      f"(transition at round {_transition_round + 1})")
+            elif schedule == 'alternating':
+                _apply_attack_this_round = (round_idx % 2 == 0)
+                phase_label = "ATTACK" if _apply_attack_this_round else "BENIGN"
+                print(f"Client {self.client_id} (MALICIOUS): Round {round_idx + 1} → {phase_label} (alternating)")
+
+        # If this is a malicious client, apply the gradient attack (unless benign phase)
+        if self.is_malicious and hasattr(self, 'attack') and _apply_attack_this_round:
             try:
                 modified_gradient = self.attack.apply_gradient_attack(client_gradient)
                 

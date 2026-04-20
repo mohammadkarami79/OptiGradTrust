@@ -227,7 +227,7 @@ def configure_for_dataset(dataset: str, num_clients: int = 10,
     # CRITICAL FIX: Disable RL and dual attention for pure baseline methods
     # This ensures baselines like 'krum', 'median', etc. don't get overridden by RL
     # AND ensures they use uniform weights (not OptiGradTrust's trust weights!)
-    pure_baselines = ['fedavg', 'krum', 'median', 'trimmed_mean', 'fltrust', 'trfa', 'fedbn', 'fedprox']
+    pure_baselines = ['fedavg', 'krum', 'median', 'trimmed_mean', 'fltrust', 'trfa', 'fedbn', 'fedprox', 'rfa', 'signguard', 'fedadmm']
     if aggregation_method in pure_baselines:
         config.RL_AGGREGATION_METHOD = 'dual_attention'  # Disable RL, use aggregation directly
         config.RL_WARMUP_ROUNDS = 999  # Never transition to RL
@@ -470,6 +470,40 @@ def compute_significance_tests(values_a: List[float], values_b: List[float],
 
 
 # =============================================================================
+# CONFIG PROPAGATION HELPER
+# =============================================================================
+
+_WILDCARD_IMPORT_MODULES = [
+    'federated_learning.training.server',
+    'federated_learning.training.client',
+    'federated_learning.data.dataset',
+    'federated_learning.data.dataset_utils',
+    'federated_learning.data.alzheimer_dataset',
+    'federated_learning.data.cifar_dataset',
+    'federated_learning.utils.model_utils',
+    'federated_learning.utils.training_utils',
+    'federated_learning.utils.data_utils',
+    'federated_learning.utils.shapley_utils',
+    'federated_learning.training.training_utils',
+    'federated_learning.training.aggregation',
+    'federated_learning.attacks.attack_utils',
+    'federated_learning.privacy.privacy_utils',
+    'federated_learning.privacy.homomorphic_encryption',
+]
+
+def _sync_config_to_modules():
+    """Push current config values to all modules that used 'from config import *'."""
+    import federated_learning.config.config as _cfg
+    config_attrs = {a: getattr(_cfg, a) for a in dir(_cfg) if a.isupper() and not a.startswith('_')}
+    for mod_name in _WILDCARD_IMPORT_MODULES:
+        mod = sys.modules.get(mod_name)
+        if mod is None:
+            continue
+        for attr, val in config_attrs.items():
+            if hasattr(mod, attr):
+                setattr(mod, attr, val)
+
+# =============================================================================
 # CORE EXPERIMENT FUNCTION
 # =============================================================================
 
@@ -532,6 +566,8 @@ def run_single_experiment(
     if flip_probability is not None:
         config.FLIP_PROBABILITY = flip_probability
         print(f"[ATTACK SEVERITY] Flip probability: {flip_probability}")
+    
+    _sync_config_to_modules()
     
     result = {
         'dataset': dataset,

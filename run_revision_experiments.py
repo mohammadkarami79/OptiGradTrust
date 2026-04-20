@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
 =============================================================================
-OptiGradTrust — Revision Experiments (Timing Breakdown + Combined Ablation)
+OptiGradTrust -- Revision Experiments
 =============================================================================
 
-Two experiments for the paper revision:
+Experiments for the paper revision:
 
   Experiment 1: Per-component timing breakdown (original config, Alzheimer MRI)
   Experiment 2: Combined component ablation   (ablation / strengthened config)
+  Table 9:      Single-component ablation + FedAvg  (Alzheimer, ablation config)
+  Table 8:      Single-component ablation           (OASIS, strengthened config)
 
 This script is *additive*: it imports from the existing codebase and does NOT
 modify any existing file.
@@ -15,8 +17,11 @@ modify any existing file.
 USAGE:
     python run_revision_experiments.py --experiment timing     # Exp 1 only
     python run_revision_experiments.py --experiment ablation   # Exp 2 only
-    python run_revision_experiments.py --experiment all        # Both
-    python run_revision_experiments.py --experiment timing --dry-run   # Quick 2-round sanity check
+    python run_revision_experiments.py --experiment table9     # Table 9 (Alzheimer)
+    python run_revision_experiments.py --experiment table8     # Table 8 (OASIS)
+    python run_revision_experiments.py --experiment tables     # Table 8 + Table 9
+    python run_revision_experiments.py --experiment all        # Everything
+    python run_revision_experiments.py --experiment table9 --dry-run
 
 Author: OptiGradTrust Team
 =============================================================================
@@ -419,7 +424,7 @@ def run_timing_experiment(num_rounds: int = 25, seed: int = 42, dry_run: bool = 
         writer.writeheader()
         for row in per_round_timings:
             writer.writerow(row)
-    logger.info(f"Saved per-round timings → {csv_path}")
+    logger.info(f"Saved per-round timings -> {csv_path}")
 
     # ── print table ──────────────────────────────────────────────────────
     instrumented_acc = rd_acc if 'rd_acc' in locals() else None
@@ -466,7 +471,7 @@ def run_timing_experiment(num_rounds: int = 25, seed: int = 42, dry_run: bool = 
     }
     with open(json_path, 'w') as f:
         json.dump(json_obj, f, indent=2)
-    logger.info(f"Saved JSON summary → {json_path}")
+    logger.info(f"Saved JSON summary -> {json_path}")
 
     return json_obj
 
@@ -543,8 +548,10 @@ def run_combined_ablation(dry_run: bool = False):
     all_results: List[Dict] = []
 
     # ──────────────────────────────────────────────────────────────────────
-    # ALZHEIMER MRI — ablation config
-    # 40 % malicious, scaling ×20 + Gaussian noise, Dirichlet α=0.1, 25 rds, seed=42
+    # ALZHEIMER MRI — ablation config (matches paper Table 9)
+    # 40 % malicious, scaling ×20, Dirichlet α=0.1, 25 rds, seed=42
+    # NOTE: attack_type='scaling_attack' only applies gradient scaling;
+    #       noise_factor and flip_probability have no effect for this type.
     # ──────────────────────────────────────────────────────────────────────
     logger.info("\n>>> ALZHEIMER MRI (ablation config) <<<")
     alz_epochs = epochs_override or 25
@@ -560,8 +567,6 @@ def run_combined_ablation(dry_run: bool = False):
             epochs=alz_epochs,
             malicious_ratio=0.4,
             scaling_factor=20.0,
-            noise_factor=15.0,
-            flip_probability=0.9,
         )
         result['experiment'] = 'combined_ablation'
         result['config_name'] = cfg['name']
@@ -577,8 +582,9 @@ def run_combined_ablation(dry_run: bool = False):
             logger.error(f"    FAILED: {result.get('error', 'unknown')}")
 
     # ──────────────────────────────────────────────────────────────────────
-    # OASIS — strengthened config (n = 5 seeds)
-    # 40 % malicious, scaling ×30, noise 15, flip 0.9, IID, 8 rounds
+    # OASIS -- strengthened config (n = 5 seeds)
+    # 40 % malicious, scaling x30, IID, 8 rounds
+    # NOTE: noise_factor/flip_probability removed -- no effect for scaling_attack
     # ──────────────────────────────────────────────────────────────────────
     logger.info("\n>>> OASIS (strengthened config, n=%d seeds) <<<" % len(seeds_oasis))
     oasis_epochs = epochs_override or 8
@@ -596,8 +602,6 @@ def run_combined_ablation(dry_run: bool = False):
                 epochs=oasis_epochs,
                 malicious_ratio=0.4,
                 scaling_factor=30.0,
-                noise_factor=15.0,
-                flip_probability=0.9,
             )
             result['experiment'] = 'combined_ablation'
             result['config_name'] = cfg['name']
@@ -642,13 +646,13 @@ def run_combined_ablation(dry_run: bool = False):
             writer = csv.DictWriter(f, fieldnames=csv_rows[0].keys())
             writer.writeheader()
             writer.writerows(csv_rows)
-        logger.info(f"Saved raw results → {csv_path}")
+        logger.info(f"Saved raw results -> {csv_path}")
 
     # ── save JSON ────────────────────────────────────────────────────────
     json_path = os.path.join(RESULTS_DIR, 'combined_ablation_results.json')
     with open(json_path, 'w') as f:
         json.dump(all_results, f, indent=2, default=str)
-    logger.info(f"Saved JSON results → {json_path}")
+    logger.info(f"Saved JSON results -> {json_path}")
 
     # ── print summary tables ─────────────────────────────────────────────
     _print_ablation_summary(all_results)
@@ -700,6 +704,255 @@ def _print_ablation_summary(all_results: List[Dict]):
                 np.mean(recs), np.std(recs),
                 np.mean(f1s), np.std(f1s)))
         logger.info("=" * 80)
+
+
+# =============================================================================
+# TABLE 9 — SINGLE-COMPONENT ABLATION + FedAvg (ALZHEIMER)
+# =============================================================================
+# Ablation config: 40% malicious, scaling x20, Dirichlet alpha=0.1,
+#                  25 rounds, seed=42, fedbn_fedprox aggregation.
+
+TABLE9_CONFIGS = [
+    {'name': 'full',             'vae': True,  'shapley': True,  'dual_attention': True,  'rl': True},
+    {'name': 'no_vae',           'vae': False, 'shapley': True,  'dual_attention': True,  'rl': True},
+    {'name': 'no_shapley',       'vae': True,  'shapley': False, 'dual_attention': True,  'rl': True},
+    {'name': 'no_rl',            'vae': True,  'shapley': True,  'dual_attention': True,  'rl': False},
+    {'name': 'no_dual_attention','vae': True,  'shapley': True,  'dual_attention': False, 'rl': True},
+]
+
+
+def run_table9_alzheimer(dry_run: bool = False):
+    """
+    Run Table 9: single-component ablation (5 configs) + FedAvg baseline
+    on Alzheimer MRI with the ablation attack config, seed=42.
+    """
+    logger.info("=" * 70)
+    logger.info("TABLE 9: SINGLE-COMPONENT ABLATION + FedAvg (ALZHEIMER)")
+    logger.info("=" * 70)
+
+    epochs = 2 if dry_run else 25
+    all_results: List[Dict] = []
+
+    # --- 5 single-component ablation configs ---
+    for cfg in TABLE9_CONFIGS:
+        logger.info(f"\n  Config: {cfg['name']}")
+        result = run_single_experiment(
+            ablation_config=cfg,
+            dataset='ALZHEIMER',
+            attack_type='scaling_attack',
+            seed=42,
+            num_clients=10,
+            non_iid_config={'enable': True, 'type': 'dirichlet', 'alpha': 0.1},
+            aggregation_method='fedbn_fedprox',
+            epochs=epochs,
+            malicious_ratio=0.4,
+            scaling_factor=20.0,
+        )
+        result['experiment'] = 'table9'
+        result['config_name'] = cfg['name']
+        all_results.append(result)
+
+        if result['status'] == 'completed':
+            det = result.get('detection', {})
+            logger.success(
+                f"    Acc={result['final_accuracy']:.4f}  "
+                f"P={det.get('precision',0):.4f}  R={det.get('recall',0):.4f}  "
+                f"F1={det.get('f1_score',0):.4f}")
+        else:
+            logger.error(f"    FAILED: {result.get('error', 'unknown')}")
+
+    # --- FedAvg baseline (no defense components) ---
+    logger.info(f"\n  Config: fedavg_baseline")
+    fedavg_result = run_single_experiment(
+        dataset='ALZHEIMER',
+        attack_type='scaling_attack',
+        seed=42,
+        num_clients=10,
+        non_iid_config={'enable': True, 'type': 'dirichlet', 'alpha': 0.1},
+        aggregation_method='fedavg',
+        epochs=epochs,
+        malicious_ratio=0.4,
+        scaling_factor=20.0,
+    )
+    fedavg_result['experiment'] = 'table9'
+    fedavg_result['config_name'] = 'fedavg_baseline'
+    all_results.append(fedavg_result)
+
+    if fedavg_result['status'] == 'completed':
+        det = fedavg_result.get('detection', {})
+        logger.success(
+            f"    Acc={fedavg_result['final_accuracy']:.4f}  "
+            f"P={det.get('precision',0):.4f}  R={det.get('recall',0):.4f}  "
+            f"F1={det.get('f1_score',0):.4f}")
+    else:
+        logger.error(f"    FAILED: {fedavg_result.get('error', 'unknown')}")
+
+    # --- Save results ---
+    csv_path = os.path.join(RESULTS_DIR, 'table9_results.csv')
+    csv_rows = []
+    for r in all_results:
+        det = r.get('detection', {})
+        csv_rows.append({
+            'config_name': r.get('config_name'),
+            'accuracy': r.get('final_accuracy'),
+            'precision': det.get('precision'),
+            'recall': det.get('recall'),
+            'f1_score': det.get('f1_score'),
+            'tp': det.get('true_positives'),
+            'fp': det.get('false_positives'),
+            'fn': det.get('false_negatives'),
+            'tn': det.get('true_negatives'),
+            'status': r.get('status'),
+            'total_time': r.get('total_time'),
+        })
+    if csv_rows:
+        with open(csv_path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=csv_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(csv_rows)
+        logger.info(f"Saved CSV -> {csv_path}")
+
+    json_path = os.path.join(RESULTS_DIR, 'table9_results.json')
+    with open(json_path, 'w') as f:
+        json.dump(all_results, f, indent=2, default=str)
+    logger.info(f"Saved JSON -> {json_path}")
+
+    # --- Summary table ---
+    completed = [r for r in all_results if r.get('status') == 'completed']
+    if completed:
+        logger.info("\n" + "=" * 80)
+        logger.info("TABLE 9: ALZHEIMER MRI ABLATION (40%% malicious, scaling x20, Dirichlet a=0.1)")
+        logger.info("%-25s %10s %10s %10s %10s" %
+                    ("Configuration", "Acc(%)", "Prec(%)", "Rec(%)", "F1(%)"))
+        logger.info("-" * 67)
+        for r in completed:
+            det = r.get('detection', {})
+            logger.info("%-25s %9.2f %9.2f %9.2f %9.2f" % (
+                r['config_name'],
+                r['final_accuracy'] * 100,
+                det.get('precision', 0) * 100,
+                det.get('recall', 0) * 100,
+                det.get('f1_score', 0) * 100))
+        logger.info("=" * 80)
+
+    return all_results
+
+
+# =============================================================================
+# TABLE 8 — SINGLE-COMPONENT ABLATION (OASIS)
+# =============================================================================
+# Strengthened config: scaling x30, 40% malicious, IID, 8 rounds, n=5 seeds.
+
+TABLE8_CONFIGS = [
+    {'name': 'full',             'vae': True,  'shapley': True,  'dual_attention': True,  'rl': True},
+    {'name': 'no_vae',           'vae': False, 'shapley': True,  'dual_attention': True,  'rl': True},
+    {'name': 'no_rl',            'vae': True,  'shapley': True,  'dual_attention': True,  'rl': False},
+    {'name': 'no_dual_attention','vae': True,  'shapley': True,  'dual_attention': False, 'rl': True},
+]
+
+
+def run_table8_oasis(dry_run: bool = False):
+    """
+    Run Table 8: single-component ablation (4 configs x 5 seeds)
+    on OASIS with the strengthened config (scaling, 40% malicious, IID).
+    """
+    logger.info("=" * 70)
+    logger.info("TABLE 8: SINGLE-COMPONENT ABLATION (OASIS)")
+    logger.info("=" * 70)
+
+    epochs = 2 if dry_run else 8
+    seeds = [42] if dry_run else SEEDS
+    all_results: List[Dict] = []
+
+    for cfg in TABLE8_CONFIGS:
+        logger.info(f"\n  Config: {cfg['name']}")
+        seed_results = []
+        for seed in seeds:
+            result = run_single_experiment(
+                ablation_config=cfg,
+                dataset='OASIS',
+                attack_type='scaling_attack',
+                seed=seed,
+                num_clients=10,
+                non_iid_config={'enable': False, 'type': 'iid', 'alpha': None},
+                aggregation_method='fedbn_fedprox',
+                epochs=epochs,
+                malicious_ratio=0.4,
+                scaling_factor=30.0,
+            )
+            result['experiment'] = 'table8'
+            result['config_name'] = cfg['name']
+            all_results.append(result)
+
+            if result['status'] == 'completed':
+                seed_results.append(result)
+                det = result.get('detection', {})
+                logger.success(
+                    f"    Seed {seed}: Acc={result['final_accuracy']:.4f}  "
+                    f"F1={det.get('f1_score',0):.4f}")
+            else:
+                logger.error(f"    Seed {seed}: FAILED")
+
+        if seed_results:
+            accs = [r['final_accuracy'] for r in seed_results]
+            logger.info(f"    Mean Acc: {np.mean(accs):.4f} +/- {np.std(accs):.4f}")
+
+    # --- Save results ---
+    csv_path = os.path.join(RESULTS_DIR, 'table8_results.csv')
+    csv_rows = []
+    for r in all_results:
+        det = r.get('detection', {})
+        csv_rows.append({
+            'config_name': r.get('config_name'),
+            'seed': r.get('seed'),
+            'accuracy': r.get('final_accuracy'),
+            'precision': det.get('precision'),
+            'recall': det.get('recall'),
+            'f1_score': det.get('f1_score'),
+            'tp': det.get('true_positives'),
+            'fp': det.get('false_positives'),
+            'fn': det.get('false_negatives'),
+            'tn': det.get('true_negatives'),
+            'status': r.get('status'),
+            'total_time': r.get('total_time'),
+        })
+    if csv_rows:
+        with open(csv_path, 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=csv_rows[0].keys())
+            writer.writeheader()
+            writer.writerows(csv_rows)
+        logger.info(f"Saved CSV -> {csv_path}")
+
+    json_path = os.path.join(RESULTS_DIR, 'table8_results.json')
+    with open(json_path, 'w') as f:
+        json.dump(all_results, f, indent=2, default=str)
+    logger.info(f"Saved JSON -> {json_path}")
+
+    # --- Summary table ---
+    completed = [r for r in all_results if r.get('status') == 'completed']
+    if completed:
+        logger.info("\n" + "=" * 80)
+        logger.info("TABLE 8: OASIS ABLATION (40%% malicious, scaling x30, IID, n=5 seeds)")
+        logger.info("%-25s %15s %15s %15s %15s" %
+                    ("Configuration", "Acc(%)", "Prec(%)", "Rec(%)", "F1(%)"))
+        logger.info("-" * 87)
+        from itertools import groupby
+        sorted_results = sorted(completed, key=lambda x: x['config_name'])
+        for cfg_name, group in groupby(sorted_results, key=lambda x: x['config_name']):
+            items = list(group)
+            accs = [r['final_accuracy'] * 100 for r in items]
+            precs = [r['detection']['precision'] * 100 for r in items]
+            recs = [r['detection']['recall'] * 100 for r in items]
+            f1s = [r['detection']['f1_score'] * 100 for r in items]
+            logger.info("%-25s %6.2f+/-%-6.2f %6.2f+/-%-6.2f %6.2f+/-%-6.2f %6.2f+/-%-6.2f" % (
+                cfg_name,
+                np.mean(accs), np.std(accs),
+                np.mean(precs), np.std(precs),
+                np.mean(recs), np.std(recs),
+                np.mean(f1s), np.std(f1s)))
+        logger.info("=" * 80)
+
+    return all_results
 
 
 # =============================================================================
@@ -787,7 +1040,7 @@ def generate_revision_summary(timing_result, ablation_results):
 
     with open(md_path, 'w') as f:
         f.write('\n'.join(lines))
-    logger.info(f"Summary written → {md_path}")
+    logger.info(f"Summary written -> {md_path}")
 
 
 # =============================================================================
@@ -796,7 +1049,8 @@ def generate_revision_summary(timing_result, ablation_results):
 
 def main():
     parser = argparse.ArgumentParser(description='OptiGradTrust Revision Experiments')
-    parser.add_argument('--experiment', choices=['timing', 'ablation', 'all'],
+    parser.add_argument('--experiment',
+                        choices=['timing', 'ablation', 'table9', 'table8', 'tables', 'all'],
                         default='all', help='Which experiment to run')
     parser.add_argument('--dry-run', action='store_true',
                         help='Quick sanity check (2 rounds, 1 seed)')
@@ -808,12 +1062,20 @@ def main():
 
     timing_result = None
     ablation_results = None
+    table9_results = None
+    table8_results = None
 
     if args.experiment in ('timing', 'all'):
         timing_result = run_timing_experiment(dry_run=args.dry_run)
 
     if args.experiment in ('ablation', 'all'):
         ablation_results = run_combined_ablation(dry_run=args.dry_run)
+
+    if args.experiment in ('table9', 'tables', 'all'):
+        table9_results = run_table9_alzheimer(dry_run=args.dry_run)
+
+    if args.experiment in ('table8', 'tables', 'all'):
+        table8_results = run_table8_oasis(dry_run=args.dry_run)
 
     generate_revision_summary(timing_result, ablation_results)
     logger.info("\nAll revision experiments complete.")

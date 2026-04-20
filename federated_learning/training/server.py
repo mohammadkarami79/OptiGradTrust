@@ -7,6 +7,12 @@ from federated_learning.models.resnet import ResNet50Alzheimer, ResNet18Alzheime
 from federated_learning.models.vae import VAE, GradientVAE
 from federated_learning.models.attention import DualAttention
 from federated_learning.models.rl_actor_critic import ActorCritic
+from federated_learning.aggregators.byzantine_baselines import (
+    krum_aggregate,
+    fltrust_aggregate,
+    rfa_aggregate,
+    signguard_aggregate,
+)
 from torch.utils.data import DataLoader, Subset
 import copy
 import torch.optim as optim
@@ -654,10 +660,29 @@ class Server:
             # This ensures we maintain proper client identification throughout
             gradient_to_client_map = {}
             
+            # R3-D: prepare a VAE snapshot that malicious clients with
+            # adaptive_vae_attack can read. We share one frozen eval copy per
+            # round so all malicious clients see the SAME VAE state.
+            _vae_snapshot_for_round = None
+            try:
+                if hasattr(self, 'vae') and self.vae is not None:
+                    _vae_snapshot_for_round = copy.deepcopy(self.vae).eval()
+                    for _p in _vae_snapshot_for_round.parameters():
+                        _p.requires_grad_(False)
+            except Exception as _e:
+                print(f"[R3-D] Could not prepare VAE snapshot ({_e})")
+                _vae_snapshot_for_round = None
+
             for client_idx in selected_clients:
                 client = self.clients[client_idx]
+                # Forward the VAE snapshot to the Attack object (not the client
+                # itself) because apply_gradient_attack reads self.vae_snapshot
+                # on the Attack instance, not the Client.
+                client.vae_snapshot = _vae_snapshot_for_round
+                if hasattr(client, 'attack') and client.attack is not None:
+                    client.attack.vae_snapshot = _vae_snapshot_for_round
                 print(f"\nClient {client_idx} (Malicious: {client.is_malicious})")
-                
+
                 # Client performs local training and computes gradient
                 try:
                     result = client.train(self.global_model, round_idx)
@@ -796,8 +821,56 @@ class Server:
                 # Convert feature tensor to list for JSON serialization
                 round_metrics[round_idx]['features'][client_idx] = features_tensor[i].cpu().tolist()
                 
+            # ------------------------------------------------------------------
+            # R3-E: rule-based trust (equal-weight linear combination of
+            # fingerprint features) — overrides dual attention when enabled.
+            # ------------------------------------------------------------------
+            use_rule_based = (
+                'USE_RULE_BASED_TRUST' in globals() and USE_RULE_BASED_TRUST
+                and len(all_features) > 0
+            )
+            if use_rule_based:
+                print("\n--- Computing trust scores with RULE-BASED aggregator "
+                      "(equal-weight feature mean) ---")
+                if isinstance(all_features, torch.Tensor):
+                    features_tensor = all_features
+                else:
+                    features_tensor = torch.stack(all_features) \
+                        if isinstance(all_features[0], torch.Tensor) else all_features
+                # Features are (approximately) in [0, 1]; higher = more suspicious.
+                # Trust = 1 - mean_over_features(client).
+                malicious_scores_t = features_tensor.mean(dim=1)
+                client_malicious_scores = malicious_scores_t.cpu().numpy().tolist()
+                client_trust_scores = [1.0 - s for s in client_malicious_scores]
+                self.trust_scores = torch.tensor(client_trust_scores, device=self.device)
+                self.malicious_scores = malicious_scores_t
+                self.confidence_scores = torch.ones(len(client_indices), device=self.device)
+                for i, client_idx in enumerate(client_indices):
+                    client = self.clients[client_idx]
+                    is_mal = "YES" if client.is_malicious else "NO"
+                    round_metrics[round_idx]['trust_scores'][client_idx] = client_trust_scores[i]
+                    round_metrics[round_idx]['malicious_scores'] = round_metrics[round_idx].get('malicious_scores', {})
+                    round_metrics[round_idx]['malicious_scores'][client_idx] = client_malicious_scores[i]
+                    print(f"Client {client_idx} (Malicious: {is_mal}): "
+                          f"Trust = {client_trust_scores[i]:.4f} (Malicious = {client_malicious_scores[i]:.4f})")
+                # Detection via a fixed threshold at 0.5 on the mean feature score.
+                detected = [client_indices[i]
+                            for i in range(len(client_indices))
+                            if client_malicious_scores[i] > 0.5]
+                actual_mal = [idx for idx in client_indices if self.clients[idx].is_malicious]
+                round_metrics[round_idx]['detected_malicious'] = detected
+                round_metrics[round_idx]['actual_malicious'] = actual_mal
+                round_metrics[round_idx]['detection_results'] = {
+                    'detected': detected,
+                    'actually_malicious': actual_mal,
+                    'true_positives':  len([x for x in detected if self.clients[x].is_malicious]),
+                    'false_positives': len([x for x in detected if not self.clients[x].is_malicious]),
+                    'false_negatives': len([x for x in actual_mal if x not in detected]),
+                    'true_negatives':  len([x for x in client_indices
+                                            if not self.clients[x].is_malicious and x not in detected]),
+                }
             # Compute trust scores using dual attention model
-            if self.dual_attention is not None and len(all_features) > 0:
+            elif self.dual_attention is not None and len(all_features) > 0:
                 print("\n--- Computing trust scores with dual attention ---")
                 
                 # Get the global context (mean of all features)
@@ -855,9 +928,20 @@ class Server:
             
             # Compute aggregation weights based on trust scores and selected method
             print("\n--- Computing aggregation weights ---")
-            
+
+            # R3-E: when rule-based trust is active, derive weights directly
+            # from the 1-mean(features) trust scores and SKIP dual-attention.
+            if use_rule_based:
+                weights = [max(0.01, 1.0 - s) for s in client_malicious_scores]
+                total_weight = sum(weights)
+                if total_weight > 0:
+                    weights = [w / total_weight for w in weights]
+                else:
+                    weights = [1.0 / len(weights)] * len(weights)
+                self.dual_attention_weights = torch.tensor(weights, device=self.device)
+                print("Rule-based weights used; dual-attention skipped.")
             # Get weights using the dual attention model's get_gradient_weights method
-            if hasattr(self.dual_attention, 'get_gradient_weights') and self.dual_attention is not None:
+            elif hasattr(self.dual_attention, 'get_gradient_weights') and self.dual_attention is not None:
                 try:
                     if isinstance(all_features, torch.Tensor):
                         features_tensor = all_features
@@ -991,22 +1075,37 @@ class Server:
             
             print(f"Using aggregation method: {current_aggregation_method}")
             
-            if current_aggregation_method == 'fedavg':
+            # ----------------------------------------------------------------
+            # R3 Byzantine baselines (Krum / FLTrust / RFA / SignGuard)
+            # These ignore self.weights and run their own robust aggregation +
+            # populate detection metrics from the aggregator's rejection set.
+            # ----------------------------------------------------------------
+            _agg_wall_start = time.perf_counter()
+            _byz_methods = ('krum', 'fltrust', 'rfa', 'signguard')
+            if current_aggregation_method in _byz_methods:
+                aggregated_gradient = self._aggregate_byzantine_baseline(
+                    method=current_aggregation_method,
+                    gradients=all_gradients,
+                    client_indices=client_indices,
+                    round_metrics=round_metrics,
+                    round_idx=round_idx,
+                )
+            elif current_aggregation_method == 'fedavg':
                 # Simple weighted averaging
                 aggregated_gradient = self._aggregate_fedavg(all_gradients, self.weights)
-                
+
             elif current_aggregation_method == 'fedavg_with_trust':
                 # FedAvg with trust scores as weights
                 aggregated_gradient = self._aggregate_fedavg(all_gradients, self.weights)
-                
+
             elif current_aggregation_method == 'fedprox':
                 # FedProx aggregation (same as FedAvg for aggregation, proximal term is applied during client training)
                 aggregated_gradient = self._aggregate_fedprox(all_gradients, self.weights)
-                
+
             elif current_aggregation_method == 'fedbn':
                 # FedBN - Skip BatchNorm parameters during aggregation
                 aggregated_gradient = self._aggregate_fedbn(all_gradients, self.weights)
-                
+
             elif current_aggregation_method == 'fedadmm':
                 # FedADMM aggregation
                 aggregated_gradient = self._aggregate_fedadmm(all_gradients, self.weights)
@@ -1055,6 +1154,29 @@ class Server:
                 print(f"Unknown aggregation method: {current_aggregation_method}. Using weighted average.")
                 aggregated_gradient = self._aggregate_fedavg(all_gradients, self.weights)
             
+            # R3-B: record aggregation wall-clock and comm volume if requested
+            _agg_wall_s = time.perf_counter() - _agg_wall_start
+            if 'MEASURE_OVERHEAD' in globals() and MEASURE_OVERHEAD:
+                try:
+                    # comm volume = N clients * gradient size in MB (upload)
+                    grad_bytes = all_gradients[0].element_size() * all_gradients[0].numel()
+                    comm_mb = (len(all_gradients) * grad_bytes) / (1024.0 * 1024.0)
+                    peak_mem_mb = 0.0
+                    if torch.cuda.is_available():
+                        peak_mem_mb = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
+                    round_metrics[round_idx]['overhead'] = {
+                        'agg_wall_time_s':     float(_agg_wall_s),
+                        'comm_volume_mb':      float(comm_mb),
+                        'peak_mem_mb':         float(peak_mem_mb),
+                        'aggregation_method':  current_aggregation_method,
+                        'num_clients':         len(all_gradients),
+                        'grad_dimension':      all_gradients[0].numel(),
+                    }
+                    print(f"[overhead] agg={_agg_wall_s*1000:.2f} ms  "
+                          f"comm={comm_mb:.2f} MB  peak_mem={peak_mem_mb:.2f} MB")
+                except Exception as _e:
+                    print(f"[overhead] skipped ({_e})")
+
             # Update global model with aggregated gradient
             print("\n--- Updating global model with aggregated gradient ---")
             agg_norm = torch.norm(aggregated_gradient).item()
@@ -1160,6 +1282,82 @@ class Server:
         # Return the aggregated gradient
         return aggregated
 
+    def _aggregate_fedprox(self, gradients, weights):
+        """
+        FedProx aggregation.
+        The proximal term μ/2 * ||w - w_global||^2 is applied DURING client
+        training (Client.train uses FEDPROX_MU when AGGREGATION_METHOD is
+        'fedprox' or 'fedbn_fedprox'). At the server, the aggregation step
+        itself is a weighted average, identical to FedAvg.
+        This method exists so AGGREGATION_METHOD='fedprox' does not crash.
+        """
+        return self._aggregate_fedavg(gradients, weights)
+
+    def _aggregate_byzantine_baseline(self, method, gradients, client_indices,
+                                       round_metrics, round_idx):
+        """
+        Dispatch to a Byzantine-robust baseline aggregator (R3 experiments).
+
+        Also populates round_metrics[round_idx]['detection_results'] and
+        ['detected_malicious']/'actual_malicious' using the aggregator's own
+        rejection set, so detection F1 can be computed uniformly later.
+        """
+        from federated_learning.aggregators import (
+            krum_aggregate, fltrust_aggregate, rfa_aggregate, signguard_aggregate,
+        )
+
+        # run the selected baseline
+        if method == 'krum':
+            num_byz = int(getattr(self, '_num_malicious_hint',
+                                  max(1, int(len(gradients) * 0.3))))
+            agg, rej_local = krum_aggregate(gradients, num_byzantine=num_byz)
+
+        elif method == 'fltrust':
+            # Prefer the mean of the server's root gradients as the trust anchor
+            root = None
+            if hasattr(self, 'root_gradients') and self.root_gradients is not None \
+                    and len(self.root_gradients) > 0:
+                try:
+                    rg = [g.to(gradients[0].device).reshape(-1) for g in self.root_gradients]
+                    root = torch.stack(rg, dim=0).mean(dim=0)
+                except Exception:
+                    root = None
+            if root is None:
+                # Fall back to the median of client gradients (less robust but won't crash)
+                print("[FLTrust] root_gradients not available; "
+                      "falling back to median client gradient as reference")
+                root = torch.stack([g.reshape(-1) for g in gradients], dim=0).median(dim=0).values
+            agg, rej_local = fltrust_aggregate(gradients, root)
+
+        elif method == 'rfa':
+            agg, rej_local = rfa_aggregate(gradients, num_iters=5)
+
+        elif method == 'signguard':
+            agg, rej_local = signguard_aggregate(gradients)
+
+        else:
+            raise ValueError(f"_aggregate_byzantine_baseline: unknown method {method}")
+
+        # map local indices -> global client_indices for detection reporting
+        detected = [client_indices[i] for i in rej_local if i < len(client_indices)]
+        actual_mal = [idx for idx in client_indices if self.clients[idx].is_malicious]
+
+        round_metrics[round_idx]['detected_malicious'] = detected
+        round_metrics[round_idx]['actual_malicious'] = actual_mal
+        round_metrics[round_idx]['detection_results'] = {
+            'detected': detected,
+            'actually_malicious': actual_mal,
+            'true_positives':  len([x for x in detected if self.clients[x].is_malicious]),
+            'false_positives': len([x for x in detected if not self.clients[x].is_malicious]),
+            'false_negatives': len([x for x in actual_mal if x not in detected]),
+            'true_negatives':  len([x for x in client_indices
+                                    if not self.clients[x].is_malicious and x not in detected]),
+        }
+
+        print(f"[{method.upper()}] kept {len(client_indices) - len(detected)}/"
+              f"{len(client_indices)} clients; rejected={detected}")
+        return agg
+
     def _aggregate_fedadmm(self, gradients, weights, rho=1.0, sigma=0.1, iterations=3):
         """Aggregate gradients using FedADMM."""
         # Convert to tensor
@@ -1199,7 +1397,8 @@ class Server:
         """
         print("\n--- Performing RL-based weight calculation ---")
         
-        # Ensure features tensor is on the correct device
+        if isinstance(features, list):
+            features = torch.stack(features) if len(features) > 0 and isinstance(features[0], torch.Tensor) else torch.tensor(features, device=self.device)
         if features.device != self.device:
             features = features.to(self.device)
         

@@ -1,0 +1,436 @@
+================================================================================
+    EXPERIMENT SPECIFICATION REPORT FOR IMPLEMENTATION TEAM
+    OptiGradTrust - Second Revision (Round 2)
+    Date: February 24, 2026
+    Deadline for submission: April 21, 2026
+================================================================================
+
+STATUS OVERVIEW
+===============
+- Reviewer 2: FULLY ACCEPTED ("ready for publication")
+- Reviewer 1: Requests specific new experiments before acceptance
+- This report specifies ALL experiments needed to address Reviewer 1
+
+IMPORTANT: Reviewer 1 explicitly states that addressing these points "would
+significantly strengthen the paper." Their tone is constructive, not hostile.
+These experiments are the final barrier to acceptance.
+
+================================================================================
+EXPERIMENT 1: MULTI-ATTACK ABLATION (CRITICAL - REQUIRED)
+================================================================================
+
+REVIEWER'S EXACT WORDS:
+"The ablation is performed only under scaling attacks. Claims about other
+components targeting specific attack types (VAE for noise-based attacks,
+sign-consistency for sign-flipping, RL for dynamic attacks) are not supported
+by dedicated ablation experiments under those conditions."
+
+"Either (a) add focused ablation experiments under the attack type each
+component is claimed to target, at least on Alzheimer's MRI, or (b) explicitly
+rephrase these claims as design intent or hypotheses."
+
+WE CHOOSE OPTION (a) - running the experiments is far stronger for acceptance.
+
+PURPOSE:
+Demonstrate that each component contributes meaningfully under the specific
+attack type it was designed to address (not just under scaling attack).
+
+-------------------------------------------------------------------------------
+EXPERIMENT 1A: Ablation Under GAUSSIAN NOISE INJECTION Attack
+(Validates VAE component)
+-------------------------------------------------------------------------------
+
+SETUP (identical to existing Table 9 ablation EXCEPT attack type):
+  - Dataset:        Alzheimer's MRI (6,983 samples, 4 classes)
+  - Clients:        10 total
+  - Malicious:      40% (4 malicious clients)
+  - Attack:         *** GAUSSIAN NOISE INJECTION, sigma = 15.0 ***
+  - Distribution:   Dirichlet alpha = 0.1 (extreme non-IID)
+  - Rounds:         25
+  - Local epochs:   5-8
+  - Batch size:     16
+  - Optimizer:      FedBN-P (mu = 0.01)
+  - Learning rate:  1e-4, weight decay 5e-5
+  - Seed:           42
+
+CONFIGURATIONS TO RUN (5 total):
+  1. OptiGradTrust (Full system)
+  2. w/o VAE Fingerprinting    (disable VAE reconstruction error signal)
+  3. w/o Shapley Values        (disable Shapley computation)
+  4. w/o RL Adaptation         (disable DDQN, use attention-only trust)
+  5. FedAvg (No Defense)       (uniform aggregation, no trust scoring)
+
+METRICS TO RECORD FOR EACH CONFIGURATION:
+  - Final test accuracy (%)
+  - Delta Accuracy vs Full system (percentage points)
+  - Detection Precision (%)
+  - Detection Recall (%)
+  - Detection F1 (%)
+
+EXPECTED RESULTS:
+  - Removing VAE should cause a NOTICEABLE drop in accuracy or detection
+    under noise attack (unlike under scaling where VAE had zero impact),
+    because VAE learns the distributional model of benign gradients and
+    noise injection pushes gradients off this learned manifold.
+  - Shapley should still be important (maybe less than under scaling).
+  - RL impact should still be minimal (static attack schedule).
+
+DELIVERABLE FORMAT:
+  A table with this structure (same format as existing Table 9):
+
+  Configuration          | Accuracy (%) | Delta Acc | Recall (%) | F1 (%)
+  -----------------------|-------------|-----------|------------|--------
+  OptiGradTrust (Full)   |             |     --    |            |
+  w/o VAE Fingerprinting |             |           |            |
+  w/o Shapley Values     |             |           |            |
+  w/o RL Adaptation      |             |           |            |
+  FedAvg (No Defense)    |             |           |    --      |   --
+
+-------------------------------------------------------------------------------
+EXPERIMENT 1B: Ablation Under SIGN-FLIPPING Attack
+(Validates cosine similarity and sign-consistency components)
+-------------------------------------------------------------------------------
+
+SETUP (identical to 1A EXCEPT attack type):
+  - Dataset:        Alzheimer's MRI
+  - Clients:        10 total
+  - Malicious:      40% (4 malicious clients)
+  - Attack:         *** SIGN-FLIPPING, lambda = -1 ***
+                    (multiply gradient by -1 for malicious clients)
+  - Distribution:   Dirichlet alpha = 0.1
+  - Rounds:         25
+  - Local epochs:   5-8
+  - Batch size:     16
+  - Optimizer:      FedBN-P (mu = 0.01)
+  - Learning rate:  1e-4, weight decay 5e-5
+  - Seed:           42
+
+CONFIGURATIONS TO RUN (5 total):
+  1. OptiGradTrust (Full system)
+  2. w/o VAE Fingerprinting
+  3. w/o Shapley Values
+  4. w/o RL Adaptation
+  5. FedAvg (No Defense)
+
+METRICS: Same as Experiment 1A.
+
+EXPECTED RESULTS:
+  - VAE impact should be minimal (sign-flipping preserves gradient structure).
+  - Shapley should still be important (catches functional impact of attack).
+  - The key signal for sign-flipping should be cosine similarity and sign-
+    consistency. If possible, also run:
+      6. w/o Cosine Similarity   (if this can be isolated)
+      7. w/o Sign Consistency    (if this can be isolated)
+    These would show that direction-detection signals matter most for this
+    attack. If isolating these is too complex, configurations 1-5 are
+    sufficient.
+
+DELIVERABLE FORMAT: Same table format as Experiment 1A.
+
+NOTE ON BOTH 1A AND 1B:
+  If running 5 seeds is feasible within the timeline, please do so (seeds:
+  42, 123, 456, 789, 1024) and report mean +/- std. If time is tight,
+  single seed (42) is acceptable since the existing scaling ablation also
+  uses seed=42.
+
+
+================================================================================
+EXPERIMENT 2: DYNAMIC ATTACK SCHEDULE FOR RL JUSTIFICATION
+(CRITICAL - EXPLICITLY REQUIRED BY REVIEWER)
+================================================================================
+
+REVIEWER'S EXACT WORDS:
+"The RL component adds significant conceptual complexity but shows negligible
+accuracy impact (+0.08pp) in ablation. The manuscript argues RL targets
+temporal adaptivity, yet all experiments use static attack schedules. At least
+one experiment with a dynamic or alternating attack schedule is needed to
+justify RL's inclusion."
+
+This is NON-NEGOTIABLE. The reviewer explicitly says "at least one experiment
+is needed."
+
+PURPOSE:
+Show that when attacks change over time (as real adversaries would do), the
+RL component provides measurable benefit over the attention-only baseline.
+
+SETUP:
+  - Dataset:        Alzheimer's MRI
+  - Clients:        10 total
+  - Malicious:      40% (4 malicious clients)
+  - Distribution:   Dirichlet alpha = 0.1
+  - Rounds:         25
+  - Local epochs:   5-8
+  - Batch size:     16
+  - Optimizer:      FedBN-P (mu = 0.01)
+  - Learning rate:  1e-4, weight decay 5e-5
+
+ATTACK SCHEDULE (PHASE TRANSITION - PREFERRED):
+  *** This is the key difference from all previous experiments ***
+
+  - Rounds 1-12:  Malicious clients behave BENIGNLY (send honest gradients)
+                  Purpose: build false trust, simulate strategic adversary
+  - Rounds 13-25: Malicious clients SWITCH TO SCALING ATTACK (x20)
+                  Purpose: sudden attack after establishing trust
+
+  ALTERNATIVE (if phase transition is hard to implement):
+  - ALTERNATING: Scaling attack (x20) in odd rounds, benign in even rounds
+  
+  ALTERNATIVE 2 (if above are both difficult):
+  - ESCALATING: sigma=1.0 noise for rounds 1-8, scaling x10 for rounds 9-16,
+    scaling x20 for rounds 17-25
+
+  Choose whichever option is most feasible. The phase transition (benign
+  then attack) is the most compelling scientifically.
+
+IMPORTANT IMPLEMENTATION NOTE FOR RL:
+  - The RL module (DDQN) MUST be actively training during these runs, NOT
+    frozen. The whole point is that RL learns to adapt across rounds.
+  - VAE should also be actively updating (not frozen).
+  - Use the full 25 rounds with active module updates, NOT the 8-round
+    frozen configuration.
+
+CONFIGURATIONS TO RUN (3 total):
+  1. OptiGradTrust (Full system, WITH RL active and training)
+  2. w/o RL Adaptation (attention-only trust, no DDQN)
+  3. FedAvg (No Defense, baseline)
+
+SEEDS: Run with at least 3 seeds (42, 123, 456). Ideally 5 seeds.
+
+METRICS TO RECORD:
+  A) Per-round metrics (for convergence plot):
+     - Test accuracy at EACH of the 25 rounds, for EACH configuration
+     - Detection recall at each round (if possible)
+     This allows us to create a convergence curve figure.
+
+  B) Summary metrics:
+     - Final accuracy at round 25 (mean +/- std over seeds)
+     - Accuracy at round 13 (just before attack starts)
+     - Accuracy at round 18 (5 rounds after attack starts - recovery speed)
+     - Accuracy at round 25 (final - full adaptation)
+     - Detection recall and F1 at rounds 13-25 (post-attack phase)
+
+EXPECTED RESULTS:
+  - Before round 13: All three methods should perform similarly (no attack).
+  - After round 13: FedAvg should degrade immediately.
+  - With RL: The system should recover faster than without RL, because RL
+    adjusts trust weights based on the change in attack pattern.
+  - Without RL: The attention-based trust should eventually catch up but
+    more slowly, since it lacks temporal memory.
+  - KEY METRIC: The accuracy gap between "Full" and "w/o RL" at rounds
+    15-20 (shortly after attack starts) should show RL's adaptive advantage.
+
+DELIVERABLES:
+  1. A TABLE with summary metrics for each configuration:
+
+     Configuration      | Acc r13 (%) | Acc r18 (%) | Acc r25 (%) | Det F1 (r13-25)
+     -------------------|-------------|-------------|-------------|----------------
+     Full (with RL)     |             |             |             |
+     w/o RL Adaptation  |             |             |             |
+     FedAvg             |             |             |   --        |      --
+
+  2. A DATA FILE (CSV or similar) with per-round accuracy for all 3
+     configurations across all seeds, so we can create a convergence figure.
+
+     Format: round, seed, config, accuracy, detection_recall, detection_f1
+
+
+================================================================================
+EXPERIMENT 3: TRUST SCORE / SHAPLEY VISUALIZATION (REQUIRED)
+================================================================================
+
+REVIEWER'S EXACT WORDS:
+"Since per-client detection is a key selling point over baselines, at least
+one qualitative visualization (e.g., trust score or Shapley value distributions
+for benign vs. malicious clients) should be included for attack types where
+detection works well."
+
+PURPOSE:
+Provide visual evidence that the trust scoring mechanism correctly
+distinguishes between honest and malicious clients.
+
+SETUP (can use EXISTING scaling attack run, no new training needed):
+  - Dataset:        Alzheimer's MRI
+  - Attack:         Scaling x20 (where detection works best, F1=1.00)
+  - Configuration:  Full OptiGradTrust system
+  - Rounds:         25
+  - Seed:           42
+
+WHAT TO EXTRACT AND PLOT:
+  Generate ONE or MORE of the following visualizations:
+
+  OPTION A (PREFERRED - most informative):
+  "Trust Score Time Series"
+  - X-axis: Round number (1-25)
+  - Y-axis: Trust score (0-1)
+  - Plot one line per client (10 lines total)
+  - Color: BLUE for benign clients (clients that are NOT malicious)
+           RED for malicious clients
+  - This should show blue lines staying high and red lines dropping low
+    after the trust module identifies them.
+
+  OPTION B (simpler but effective):
+  "Trust Score Box Plot"
+  - Two box plots side by side: "Benign Clients" vs "Malicious Clients"
+  - Y-axis: Average trust score across rounds
+  - Should show clear separation
+
+  OPTION C (if Shapley values are easily extractable):
+  "Shapley Value Distribution"
+  - Histogram or violin plot
+  - X-axis: Shapley value
+  - Two distributions overlaid: benign (blue) vs malicious (red)
+  - Should show malicious clients having lower/negative Shapley values
+
+  OPTION D (comprehensive):
+  All of the above, but Option A alone is sufficient.
+
+DELIVERABLE:
+  - One or more figure files (.png, 300+ DPI, or .pdf)
+  - If providing raw data instead: CSV file with columns:
+    round, client_id, is_malicious, trust_score, shapley_value
+
+
+================================================================================
+EXPERIMENT 4: OPTIMIZER COMPARISON UNDER ADVERSARIAL CONDITIONS (RECOMMENDED)
+================================================================================
+
+REVIEWER'S EXACT WORDS:
+"The optimizer comparison (Figure 4) evaluates eight optimizers but only on
+Alzheimer's MRI under IID, benign conditions. It would be more informative
+to show the optimizer comparison also under adversarial conditions, where
+FedBN-P's co-design advantage is claimed to be most significant."
+
+This is a RECOMMENDATION, not a hard requirement. However, doing it would
+strengthen the paper significantly and directly support FedBN-P's value.
+
+SETUP:
+  - Dataset:        Alzheimer's MRI
+  - Clients:        10 total
+  - Malicious:      30% (3 malicious clients)
+  - Attack:         Scaling x10
+  - Distribution:   IID
+  - Rounds:         25
+  - Seed:           42
+
+OPTIMIZERS TO RUN (minimum 4, ideally all 8):
+  Priority order (run as many as time allows):
+  1. FedAvg          (baseline)
+  2. FedBN           (heterogeneity-only)
+  3. FedBN-P         (our optimizer - should show best adversarial resilience)
+  4. FedProx         (proximal-only)
+  --- below are nice-to-have ---
+  5. FedNova
+  6. SCAFFOLD
+  7. FedDWA
+  8. FedADMM
+
+METRICS:
+  - Accuracy at each round (for convergence plot)
+  - Final accuracy at round 25
+
+EXPECTED RESULTS:
+  - Under adversarial conditions, FedBN-P should show clearer advantage
+    over FedBN and FedProx compared to benign conditions.
+  - FedADMM should perform worst (accumulates adversarial bias).
+  - FedBN-P's proximal term should stabilize against adversarial updates.
+
+DELIVERABLES:
+  1. Convergence figure (accuracy vs round for each optimizer under attack)
+  2. Table with final accuracy per optimizer
+  3. Raw data (CSV) with per-round accuracy for figure generation
+
+
+================================================================================
+PRIORITY AND TIMELINE
+================================================================================
+
+PRIORITY ORDER (if time is limited):
+  1. EXPERIMENT 2 (Dynamic attack for RL)     - HIGHEST PRIORITY, non-negotiable
+  2. EXPERIMENT 1A (Noise ablation for VAE)    - CRITICAL
+  3. EXPERIMENT 3 (Trust visualization)        - REQUIRED
+  4. EXPERIMENT 1B (Sign-flip ablation)        - CRITICAL
+  5. EXPERIMENT 4 (Optimizer adversarial)      - RECOMMENDED
+
+ESTIMATED COMPUTATIONAL TIME (based on existing timing data):
+  - Each ablation configuration takes ~180 seconds/round x 25 rounds ~ 75 min
+  - Experiment 1A: 5 configs x 75 min = ~6.25 hours (single seed)
+  - Experiment 1B: 5 configs x 75 min = ~6.25 hours (single seed)
+  - Experiment 2:  3 configs x 75 min x 5 seeds = ~18.75 hours
+  - Experiment 3:  No new training needed (extract from existing run)
+  - Experiment 4:  4-8 configs x 75 min = ~5-10 hours (single seed)
+  - TOTAL ESTIMATED: ~36-55 hours of GPU time
+
+DEADLINE:
+  - Submission deadline: April 21, 2026
+  - We need experiment results by: ~March 20, 2026
+    (to allow 4 weeks for manuscript revision and response letter)
+  - IDEAL: Deliver results as they complete, don't wait for all to finish.
+    Send Experiment 2 first (highest priority), then others.
+
+
+================================================================================
+TECHNICAL NOTES
+================================================================================
+
+1. DYNAMIC ATTACK IMPLEMENTATION (Experiment 2):
+   The key technical challenge is modifying the attack schedule to change
+   mid-experiment. In the existing code, the attack type is likely a fixed
+   parameter. For the dynamic experiment, this needs to be a function of
+   the current round number:
+
+     if round <= 12:
+         attack_type = "benign"  # malicious clients send honest gradients
+     else:
+         attack_type = "scaling"
+         attack_intensity = 20.0
+
+   The RL module and VAE MUST be actively training (not frozen) during these
+   runs. Use the full 25-round benchmark configuration, not the 8-round
+   frozen configuration.
+
+2. COMPONENT ISOLATION (Experiments 1A, 1B):
+   When removing a component, ensure ONLY that component is disabled. All
+   other modules and their interfaces should remain unchanged. The same
+   component isolation procedure used for the existing Table 9 ablation
+   should be used here.
+
+3. TRUST SCORE EXTRACTION (Experiment 3):
+   The trust scores computed by the dual-attention + RL module for each
+   client at each round should be logged. If logging is not currently
+   implemented, add simple logging:
+     - After trust computation each round, save:
+       {round, client_id, trust_score, shapley_value, is_malicious}
+
+4. REPRODUCIBILITY:
+   - Use the SAME random seeds, learning rates, and hyperparameters as
+     the existing ablation experiments.
+   - Report the exact seed(s) used.
+   - If using GPU, note the GPU model (RTX 3090 as in previous experiments).
+
+
+================================================================================
+DELIVERABLES SUMMARY
+================================================================================
+
+Please provide the following:
+
+  [ ] Experiment 1A table: Noise ablation on Alzheimer's MRI (5 configs)
+  [ ] Experiment 1B table: Sign-flip ablation on Alzheimer's MRI (5 configs)
+  [ ] Experiment 2 table: Dynamic attack summary metrics (3 configs)
+  [ ] Experiment 2 data: Per-round accuracy CSV (for convergence figure)
+  [ ] Experiment 3 figure: Trust score visualization (benign vs malicious)
+  [ ] Experiment 4 figure/table: Optimizer comparison under attack (optional)
+
+FORMAT: Tables can be provided as plain text, CSV, or Excel. Figures as
+PNG (300+ DPI) or PDF. Raw data as CSV.
+
+CONTACT: Please reach out immediately if:
+  - Any experiment produces unexpected results (e.g., removing VAE makes
+    things BETTER under noise attack)
+  - The dynamic attack schedule is technically difficult to implement
+  - Computational resources are insufficient for the timeline
+  We may need to adjust strategy based on actual results.
+
+================================================================================
+END OF REPORT
+================================================================================

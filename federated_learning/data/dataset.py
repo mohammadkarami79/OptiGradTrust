@@ -449,6 +449,26 @@ def split_dataset_dirichlet(dataset, num_classes, alpha=None):
                 samples_per_client[idx] += 1
         
         class_samples_per_client[c] = samples_per_client
+
+    # Guarantee each client has at least 2 samples (needed for BatchNorm)
+    total_per_client = class_samples_per_client.sum(axis=0)
+    min_samples = 2
+    for client_idx in np.where(total_per_client < min_samples)[0]:
+        deficit = min_samples - total_per_client[client_idx]
+        for c in range(num_classes):
+            donors = np.argsort(-class_samples_per_client[c])
+            for donor in donors:
+                if donor == client_idx:
+                    continue
+                give = min(int(deficit), int(class_samples_per_client[c][donor]) - 1)
+                if give > 0:
+                    class_samples_per_client[c][donor] -= give
+                    class_samples_per_client[c][client_idx] += give
+                    deficit -= give
+                if deficit <= 0:
+                    break
+            if deficit <= 0:
+                break
     
     # Distribute class samples to clients
     start_idxs = np.zeros(num_classes, dtype=int)

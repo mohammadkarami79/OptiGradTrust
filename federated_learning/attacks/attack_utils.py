@@ -73,6 +73,34 @@ def simulate_attack(raw_grad, attack_type, attack_params=None):
         noise_level = 0.1 * torch.norm(raw_grad)
         modified_grad = raw_grad + noise_level * torch.randn_like(raw_grad)
         attack_desc = "Noise attack (random noise addition)"
+
+    elif attack_type == 'gaussian_noise_injection':
+        # Gaussian noise injection with absolute sigma (R2 ablation experiment)
+        sigma = attack_params.get('sigma', 15.0)
+        modified_grad = raw_grad + torch.randn_like(raw_grad) * sigma
+        attack_desc = f"Gaussian noise injection (sigma={sigma:.1f})"
+
+    elif attack_type == 'adaptive_vae_attack':
+        # R3-D: VAE-aware adaptive attack. Without a VAE reference available
+        # here (attack_utils is used in some stateless contexts), we fall back
+        # to a "stealth-scaling" variant that keeps the norm ratio modest and
+        # rotates the direction partially toward the scaling target. The full
+        # PGD-in-VAE variant runs inside Client.apply_gradient_attack where
+        # the VAE snapshot is available.
+        factor = attack_params.get('scaling_factor', scaling_factor)
+        stealth_ratio = attack_params.get('stealth_ratio', 0.5)  # in (0, 1]
+        target = -raw_grad * factor
+        # blend benign + malicious
+        blended = (1.0 - stealth_ratio) * raw_grad + stealth_ratio * target
+        # keep norm within a modest band around the original (stealthy)
+        orig_norm_t = torch.norm(raw_grad) + 1e-12
+        blended_norm_t = torch.norm(blended) + 1e-12
+        max_amplify = 2.0
+        if blended_norm_t > max_amplify * orig_norm_t:
+            blended = blended * (max_amplify * orig_norm_t / blended_norm_t)
+        modified_grad = blended
+        attack_desc = (f"Adaptive VAE attack (fallback stealth-scaling; "
+                       f"ratio={stealth_ratio:.2f}, cap=x{max_amplify:.1f})")
         
     elif attack_type == 'min_max_attack':
         # Min-max attack as described in FLTrust paper

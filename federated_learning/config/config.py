@@ -225,6 +225,16 @@ DUAL_ATTENTION_THRESHOLD = 0.65    # Optimized threshold (was 0.75)
 # Attacker impact weighing
 ATTACKER_IMPACT_WEIGHING = True    # Enable attacker impact weighing
 
+# R3-E: rule-based trust aggregator (equal-weight linear combination of
+# fingerprint features). When True, the server skips dual attention and uses
+# 1 - mean(features) as each client's trust score. Used by R3 ablation only.
+USE_RULE_BASED_TRUST = False
+
+# R3-B: server-side overhead instrumentation. When True, Server.train()
+# records per-round aggregation wall-clock, communication volume (MB) and
+# peak GPU memory into round_metrics[r]['overhead'].
+MEASURE_OVERHEAD = False
+
 
 # ======================================
 # RL-BASED AGGREGATION CONFIGURATION
